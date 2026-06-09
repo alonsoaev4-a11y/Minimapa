@@ -15,9 +15,14 @@ import { DEFAULT_TRANSPORT_DATA } from '../data/transport';
 import type { TransportInfo, TransportData } from '../data/transport';
 import { toast } from 'sonner';
 import { POI_CATALOG, POI_CATALOG_MAP } from '../data/poiCatalog';
+import { applyPinColorsToAdvisors, applyPinColorsToMacs, savePinColorOverlay, isMissingPinColorError } from '../lib/pinColors';
 
 const ADVISOR_TITLES: AdvisorTitle[] = ['Ing', 'Lic', 'Dr'];
 const COLOR_BADGE: Record<string, string> = { blue: 'bg-blue-600', green: 'bg-green-600', orange: 'bg-orange-500' };
+const ADVISOR_PIN_PRESETS = [
+  '#002D72', '#F2A900', '#DC2626', '#16A34A', '#7C3AED',
+  '#0891B2', '#EA580C', '#DB2777', '#92400E', '#4338CA', '#0369A1', '#059669',
+];
 const DEFAULT_ACADEMIC_PROGRAMS = [
   'Lic. en Derecho', 'Lic. en Psicologia', 'Lic. en Trabajo Social', 'Lic. en Educacion', 'Lic. en Administracion',
   'Lic. en Contaduria', 'Lic. en Enfermeria', 'Lic. en Nutricion', 'Lic. en Comunicacion', 'Lic. en Mercadotecnia',
@@ -62,7 +67,8 @@ export const AdminDashboard: React.FC = () => {
     name: '',
     email: '',
     phone: '',
-    photo_url: ''
+    photo_url: '',
+    pin_color: '#002D72'
   });
   const [advisorPhotoFile, setAdvisorPhotoFile] = useState<File | null>(null);
   const [advisorPhotoPreview, setAdvisorPhotoPreview] = useState('');
@@ -106,8 +112,8 @@ export const AdminDashboard: React.FC = () => {
       const storedAdvisors = localStorage.getItem('admin_advisors');
       const storedPrograms = localStorage.getItem('admin_academic_programs');
       const storedTransport = localStorage.getItem('admin_transport');
-      setMacs(storedMacs ? JSON.parse(storedMacs) : []);
-      setAdvisors(storedAdvisors ? JSON.parse(storedAdvisors) : []);
+      setMacs(applyPinColorsToMacs(storedMacs ? JSON.parse(storedMacs) : []));
+      setAdvisors(applyPinColorsToAdvisors(storedAdvisors ? JSON.parse(storedAdvisors) : []));
       setAcademicPrograms(storedPrograms ? JSON.parse(storedPrograms) : DEFAULT_ACADEMIC_PROGRAMS.map((name, idx) => ({ id: `local-program-${idx}`, name, created_at: new Date().toISOString() })));
       setTransportInfos(storedTransport ? JSON.parse(storedTransport) : DEFAULT_TRANSPORT_DATA.map((item, idx) => ({
         id: `local-${idx}`,
@@ -125,24 +131,24 @@ export const AdminDashboard: React.FC = () => {
       ]);
 
       if (macsResult.data) {
-        setMacs(macsResult.data);
+        setMacs(applyPinColorsToMacs(macsResult.data as MacWithAdvisor[]));
       } else {
         const { data: macsFallback } = await supabase
           .from('macs')
           .select('*, advisor:advisors(*, academic_program:academic_programs(*)), mac_images(*)');
         if (macsFallback) {
           const fallbackWithoutPois = (macsFallback as MacWithAdvisor[]).map((mac) => ({ ...mac, pois: [] }));
-          setMacs(fallbackWithoutPois);
+          setMacs(applyPinColorsToMacs(fallbackWithoutPois));
         }
       }
 
       if (advisorsResult.data) {
-        setAdvisors(advisorsResult.data);
+        setAdvisors(applyPinColorsToAdvisors(advisorsResult.data as Advisor[]));
       } else {
         const { data: advisorsFallback } = await supabase
           .from('advisors')
           .select('*');
-        if (advisorsFallback) setAdvisors(advisorsFallback);
+        if (advisorsFallback) setAdvisors(applyPinColorsToAdvisors(advisorsFallback as Advisor[]));
       }
 
       if (programsResult.data) setAcademicPrograms(programsResult.data as AcademicProgram[]);
@@ -499,7 +505,8 @@ export const AdminDashboard: React.FC = () => {
         email: advisorForm.email,
         phone: advisorForm.phone,
         photo_url: finalPhotoUrl,
-        academic_program_id: finalAcademicProgramId
+        academic_program_id: finalAcademicProgramId,
+        pin_color: advisorForm.pin_color
       };
       const selectedProgram = finalAcademicProgramId
         ? (effectivePrograms.find(p => p.id === finalAcademicProgramId) || null)
@@ -512,6 +519,7 @@ export const AdminDashboard: React.FC = () => {
           const newMacs = macs.map(m => m.advisor_id === editingAdvisor.id ? { ...m, advisor: newAdvisors.find(a => a.id === editingAdvisor.id) } : m);
           setMacs(newMacs);
           saveToLocalStorage(newMacs, newAdvisors, transportInfos, effectivePrograms);
+          savePinColorOverlay(editingAdvisor.id, advisorForm.pin_color);
         } else {
           const newAdvisor: Advisor = {
             id: crypto.randomUUID(),
@@ -522,15 +530,36 @@ export const AdminDashboard: React.FC = () => {
           newAdvisors.push(newAdvisor);
           setAdvisors(newAdvisors);
           saveToLocalStorage(macs, newAdvisors, transportInfos, effectivePrograms);
+          savePinColorOverlay(newAdvisor.id, advisorForm.pin_color);
         }
         toast.success(isEditing ? 'Asesor actualizado correctamente' : 'Asesor creado correctamente');
       } else {
         if (editingAdvisor) {
-          const { error: updateError } = await supabase.from('advisors').update(advisorData).eq('id', editingAdvisor.id);
+          let { error: updateError } = await supabase.from('advisors').update(advisorData).eq('id', editingAdvisor.id);
+          if (updateError && isMissingPinColorError(updateError)) {
+            // La columna pin_color aún no existe en Supabase: guardamos el
+            // resto de los datos y conservamos el color en el respaldo local.
+            const { pin_color, ...advisorDataNoColor } = advisorData;
+            ({ error: updateError } = await supabase.from('advisors').update(advisorDataNoColor).eq('id', editingAdvisor.id));
+          }
           if (updateError) throw updateError;
+          savePinColorOverlay(editingAdvisor.id, advisorForm.pin_color);
         } else {
-          const { error: insertError } = await supabase.from('advisors').insert(advisorData);
+          let { data: insertedAdvisor, error: insertError } = await supabase
+            .from('advisors')
+            .insert(advisorData)
+            .select('id')
+            .single();
+          if (insertError && isMissingPinColorError(insertError)) {
+            const { pin_color, ...advisorDataNoColor } = advisorData;
+            ({ data: insertedAdvisor, error: insertError } = await supabase
+              .from('advisors')
+              .insert(advisorDataNoColor)
+              .select('id')
+              .single());
+          }
           if (insertError) throw insertError;
+          if (insertedAdvisor?.id) savePinColorOverlay(insertedAdvisor.id, advisorForm.pin_color);
         }
         await fetchData();
         toast.success(isEditing ? 'Asesor actualizado correctamente' : 'Asesor creado correctamente');
@@ -763,7 +792,8 @@ export const AdminDashboard: React.FC = () => {
       name: advisor.name,
       email: advisor.email,
       phone: advisor.phone,
-      photo_url: advisor.photo_url || ''
+      photo_url: advisor.photo_url || '',
+      pin_color: advisor.pin_color || '#002D72'
     });
     setAdvisorPhotoPreview(advisor.photo_url || '');
     setAdvisorPhotoFile(null);
@@ -785,7 +815,7 @@ export const AdminDashboard: React.FC = () => {
     setEditingAdvisor(null);
     setAdvisorAcademicSelect('none');
     setAdvisorAcademicCustom('');
-    setAdvisorForm({ title: 'Ing', name: '', email: '', phone: '', photo_url: '' });
+    setAdvisorForm({ title: 'Ing', name: '', email: '', phone: '', photo_url: '', pin_color: '#002D72' });
     setAdvisorPhotoFile(null);
     setAdvisorPhotoPreview('');
   };
@@ -812,48 +842,50 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#002D72] flex items-center justify-center font-black font-heading text-[#F2A900] text-sm">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 sm:py-0 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-[#002D72] flex items-center justify-center font-black font-heading text-[#F2A900] text-sm shrink-0">
               UAS
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-[#002D72]">Panel de Administración</h1>
-              <p className="text-xs text-gray-500">Gestión de MACs y Asesores</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-[#002D72] truncate">Panel de Administración</h1>
+              <p className="text-xs text-gray-500 hidden sm:block">Gestión de MACs y Asesores</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">{user?.email}</span>
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <span className="text-sm text-gray-500 hidden md:inline truncate max-w-[180px]">{user?.email}</span>
             <Button onClick={logout} variant="outline" size="sm" className="text-gray-600">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Cerrar sesión
+              <ArrowLeft className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Cerrar sesión</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'macs' | 'advisors' | 'transport')}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="macs" className="flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              Módulos MAC
+          <TabsList className="mb-6 w-full sm:w-auto overflow-x-auto">
+            <TabsTrigger value="macs" className="flex items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
+              <MapPin className="w-4 h-4 shrink-0" />
+              <span className="hidden xs:inline sm:inline">Módulos MAC</span>
+              <span className="inline xs:hidden sm:hidden">MAC</span>
             </TabsTrigger>
-            <TabsTrigger value="advisors" className="flex items-center gap-2">
-              <User className="w-4 h-4" />
+            <TabsTrigger value="advisors" className="flex items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
+              <User className="w-4 h-4 shrink-0" />
               Asesores
             </TabsTrigger>
-            <TabsTrigger value="transport" className="flex items-center gap-2">
-              <Bus className="w-4 h-4" />
-              Transporte
+            <TabsTrigger value="transport" className="flex items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
+              <Bus className="w-4 h-4 shrink-0" />
+              <span className="hidden xs:inline sm:inline">Transporte</span>
+              <span className="inline xs:hidden sm:hidden">Transp.</span>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="macs">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-900">Módulos de Atención Comunitaria</h2>
-                <Button onClick={() => { resetMacForm(); setMacModalOpen(true); }} className="bg-[#002D72] hover:bg-[#001f50]">
+              <div className="p-4 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Módulos de Atención Comunitaria</h2>
+                <Button onClick={() => { resetMacForm(); setMacModalOpen(true); }} className="bg-[#002D72] hover:bg-[#001f50] w-full sm:w-auto">
                   <Plus className="w-4 h-4 mr-2" />
                   Nuevo MAC
                 </Button>
@@ -931,9 +963,9 @@ export const AdminDashboard: React.FC = () => {
 
           <TabsContent value="advisors">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-900">Registro de Asesores</h2>
-                <Button onClick={() => { resetAdvisorForm(); setAdvisorModalOpen(true); }} className="bg-[#002D72] hover:bg-[#001f50]">
+              <div className="p-4 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Registro de Asesores</h2>
+                <Button onClick={() => { resetAdvisorForm(); setAdvisorModalOpen(true); }} className="bg-[#002D72] hover:bg-[#001f50] w-full sm:w-auto">
                   <Plus className="w-4 h-4 mr-2" />
                   Nuevo Asesor
                 </Button>
@@ -948,6 +980,7 @@ export const AdminDashboard: React.FC = () => {
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Formación</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Teléfono</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Color Pin</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">MACs Asignados</th>
                       <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
@@ -955,7 +988,7 @@ export const AdminDashboard: React.FC = () => {
                   <tbody className="divide-y divide-gray-200">
                     {advisors.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                           No hay asesores registrados. Agrega el primero.
                         </td>
                       </tr>
@@ -981,6 +1014,16 @@ export const AdminDashboard: React.FC = () => {
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-600">{advisor.email}</td>
                             <td className="px-6 py-4 text-sm text-gray-600">{advisor.phone}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-6 h-6 rounded-full border-2 border-[#F2A900] shadow-sm shrink-0"
+                                  style={{ backgroundColor: advisor.pin_color || '#002D72' }}
+                                  title={advisor.pin_color || '#002D72'}
+                                />
+                                <span className="text-xs font-mono text-gray-400">{advisor.pin_color || '#002D72'}</span>
+                              </div>
+                            </td>
                             <td className="px-6 py-4">
                               <span className="text-sm text-gray-600">
                                 {assignedMacs.length > 0 ? assignedMacs.map(m => m.name).join(', ') : 'Sin asignar'}
@@ -1008,8 +1051,8 @@ export const AdminDashboard: React.FC = () => {
 
           <TabsContent value="transport">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-900">Información de Transporte</h2>
+              <div className="p-4 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Información de Transporte</h2>
                 <Button
                   onClick={() => {
                     setSaveError('');
@@ -1020,7 +1063,7 @@ export const AdminDashboard: React.FC = () => {
                     setTransportForm({ mac_name: '', data_json: JSON.stringify({ lineas: [] }, null, 2) });
                     setTransportModalOpen(true);
                   }}
-                  className="bg-[#002D72] hover:bg-[#001f50]"
+                  className="bg-[#002D72] hover:bg-[#001f50] w-full sm:w-auto"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Nuevo Registro
@@ -1366,6 +1409,47 @@ export const AdminDashboard: React.FC = () => {
                 />
               )}
             </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-[#002D72]" />
+                Color del Pin en el Mapa
+              </Label>
+              <div className="flex flex-wrap gap-2 items-center">
+                {ADVISOR_PIN_PRESETS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setAdvisorForm({ ...advisorForm, pin_color: color })}
+                    className="w-7 h-7 rounded-full border-2 transition-all hover:scale-110"
+                    style={{
+                      backgroundColor: color,
+                      borderColor: advisorForm.pin_color === color ? '#111827' : 'transparent',
+                      transform: advisorForm.pin_color === color ? 'scale(1.15)' : undefined,
+                      outline: advisorForm.pin_color === color ? '2px solid #F2A900' : undefined,
+                      outlineOffset: '1px',
+                    }}
+                    title={color}
+                  />
+                ))}
+                <input
+                  type="color"
+                  value={advisorForm.pin_color}
+                  onChange={(e) => setAdvisorForm({ ...advisorForm, pin_color: e.target.value })}
+                  className="w-7 h-7 rounded-full cursor-pointer border border-gray-300 p-0.5 shrink-0"
+                  title="Color personalizado"
+                />
+              </div>
+              <div className="flex items-center gap-3 mt-1">
+                <div
+                  className="w-10 h-10 rounded-full border-[3px] border-[#F2A900] shadow-md flex items-center justify-center"
+                  style={{ backgroundColor: advisorForm.pin_color }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="#ffffff"/></svg>
+                </div>
+                <span className="text-xs font-mono text-gray-500">{advisorForm.pin_color}</span>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Foto JPG (Supabase Storage)</Label>
               <Input

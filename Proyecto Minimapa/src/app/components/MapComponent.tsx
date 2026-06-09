@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { PoiModal } from './PoiModal';
-import { Navigation, MapPin, Eye, EyeOff, Database, Images, ChevronLeft, ChevronRight, Route, Navigation2 } from 'lucide-react';
+import { Navigation, MapPin, Eye, EyeOff, Database, Images, ChevronLeft, ChevronRight, Route, Navigation2, Filter, MoreVertical, X } from 'lucide-react';
 import { Switch } from './ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import type { MacWithAdvisor, PoiType } from '../types/supabase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { POI_CATALOG_MAP } from '../data/poiCatalog';
@@ -28,6 +29,7 @@ const mapStyles = `
   .leaflet-popup-content {
     margin: 0 !important;
     width: 300px !important;
+    max-width: calc(100vw - 48px) !important;
   }
   .leaflet-container a.leaflet-popup-close-button {
     color: #9ca3af !important;
@@ -39,11 +41,11 @@ const mapStyles = `
   }
 `;
 
-const createMacIcon = (isActive: boolean) => L.divIcon({
+const createMacIcon = (isActive: boolean, pinColor: string = '#002D72') => L.divIcon({
   className: 'bg-transparent',
   html: `<div class="relative w-12 h-12 flex items-center justify-center transform transition-transform duration-300 hover:scale-110 ${isActive ? 'scale-110' : ''}">
-           ${isActive ? '<div class="absolute inset-0 bg-[#002D72]/20 rounded-full animate-ping"></div>' : ''}
-           <div class="relative w-10 h-10 bg-[#002D72] border-[3px] border-[#F2A900] rounded-full flex items-center justify-center shadow-lg z-10">
+           ${isActive ? `<div class="absolute inset-0 rounded-full animate-ping" style="background-color:${pinColor};opacity:0.2;"></div>` : ''}
+           <div class="relative w-10 h-10 border-[3px] border-[#F2A900] rounded-full flex items-center justify-center shadow-lg z-10" style="background-color:${pinColor}">
              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="#ffffff"/></svg>
            </div>
          </div>`,
@@ -85,6 +87,8 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeCenter, setActiveCenter] = useState<[number, number]>([25.7904, -108.9858]);
   const [showAllMacs, setShowAllMacs] = useState(false);
+  const [advisorFilter, setAdvisorFilter] = useState<string>('all');
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [userDistanceKm, setUserDistanceKm] = useState<number | null>(null);
@@ -151,7 +155,20 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
   const activePois = activeMac?.pois
     ? [...activeMac.pois].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     : [];
-  const visibleMarkers = showAllMacs ? markers : (activeMac ? [activeMac] : []);
+  const advisorsList = useMemo(() => {
+    const byId = new Map<string, NonNullable<MacWithAdvisor['advisor']>>();
+    markers.forEach((m) => { if (m.advisor) byId.set(m.advisor.id, m.advisor); });
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [markers]);
+
+  const filteredMarkers = useMemo(
+    () => (advisorFilter === 'all' ? markers : markers.filter((m) => m.advisor?.id === advisorFilter)),
+    [markers, advisorFilter],
+  );
+
+  const isFilteringByAdvisor = advisorFilter !== 'all';
+  const shouldShowAllPins = showAllMacs || isFilteringByAdvisor;
+  const visibleMarkers = shouldShowAllPins ? filteredMarkers : (activeMac ? [activeMac] : []);
   const getMacGallery = (mac: MacWithAdvisor) => {
     if (mac.mac_images && mac.mac_images.length > 0) return mac.mac_images;
     if (mac.image_url) {
@@ -164,17 +181,93 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
     <div className="relative w-full h-full bg-gray-50">
       <style>{mapStyles}</style>
 
-      {/* Toggle switch */}
-      <div className={`absolute bottom-4 left-4 z-[1000] bg-white p-3 rounded-xl shadow-lg border border-gray-200 flex items-center gap-3 transition-opacity ${disableControls ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-        <div className="flex items-center gap-2">
-          {showAllMacs ? <Eye className="w-4 h-4 text-[#002D72]" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
-          <span className="text-sm font-medium text-gray-700">Mostrar todos los MACs</span>
-        </div>
-        <Switch
-          checked={showAllMacs}
-          onCheckedChange={setShowAllMacs}
-          className="data-[state=checked]:bg-[#002D72]"
-        />
+      {/* Controles del mapa: botón de 3 puntos + panel desplegable */}
+      <div className={`absolute bottom-4 left-4 z-[1000] transition-opacity ${disableControls ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+        {/* Botón de 3 puntitos */}
+        <button
+          type="button"
+          onClick={() => setControlsOpen((prev) => !prev)}
+          aria-label="Opciones del mapa"
+          aria-expanded={controlsOpen}
+          className={`w-10 h-10 rounded-full bg-white shadow-lg border flex items-center justify-center transition-colors ${
+            controlsOpen || isFilteringByAdvisor || showAllMacs
+              ? 'border-[#002D72]/40 text-[#002D72]'
+              : 'border-gray-200 text-gray-600 hover:text-[#002D72] hover:border-[#002D72]/30'
+          }`}
+        >
+          <MoreVertical className="w-5 h-5" />
+          {(isFilteringByAdvisor || showAllMacs) && !controlsOpen && (
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#F2A900] border-2 border-white" />
+          )}
+        </button>
+
+        {/* Panel desplegable */}
+        {controlsOpen && (
+          <div className="absolute bottom-12 left-0 w-[calc(100vw-2rem)] max-w-xs sm:w-64 bg-white p-3 rounded-xl shadow-xl border border-gray-200 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-[#002D72]" /> Opciones del mapa
+              </span>
+              <button
+                type="button"
+                onClick={() => setControlsOpen(false)}
+                aria-label="Cerrar opciones"
+                className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="h-px bg-gray-100" />
+
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
+                <Filter className="w-3 h-3" /> Filtrar por asesor
+              </span>
+              <Select value={advisorFilter} onValueChange={setAdvisorFilter}>
+                <SelectTrigger className="w-full h-9 text-sm">
+                  <SelectValue placeholder="Todos los asesores" />
+                </SelectTrigger>
+                <SelectContent className="z-[2000] max-h-64">
+                  <SelectItem value="all">Todos los asesores</SelectItem>
+                  {advisorsList.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="w-3 h-3 rounded-full border border-gray-300 shrink-0"
+                          style={{ backgroundColor: a.pin_color || '#002D72' }}
+                        />
+                        {a.title} {a.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {advisorsList.length === 0 && (
+                <p className="text-xs text-gray-400">No hay asesores asignados a MACs.</p>
+              )}
+              {isFilteringByAdvisor && (
+                <p className="text-xs text-[#002D72]">
+                  Mostrando {filteredMarkers.length} MAC{filteredMarkers.length === 1 ? '' : 's'} de este asesor.
+                </p>
+              )}
+            </div>
+
+            <div className="h-px bg-gray-100" />
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {showAllMacs ? <Eye className="w-4 h-4 text-[#002D72] shrink-0" /> : <EyeOff className="w-4 h-4 text-gray-400 shrink-0" />}
+                <span className="text-sm font-medium text-gray-700 truncate">Mostrar todos los MACs</span>
+              </div>
+              <Switch
+                checked={showAllMacs}
+                onCheckedChange={setShowAllMacs}
+                className="data-[state=checked]:bg-[#002D72] shrink-0"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* No data overlay */}
@@ -212,7 +305,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
               key={mac.id}
               ref={(r) => { if (r) markerRefs.current[mac.id] = r; }}
               position={[mac.lat, mac.lng]}
-              icon={createMacIcon(activeMac?.id === mac.id)}
+              icon={createMacIcon(activeMac?.id === mac.id, mac.advisor?.pin_color || '#002D72')}
               eventHandlers={{
                 click: () => {
                   setActiveMac(mac);

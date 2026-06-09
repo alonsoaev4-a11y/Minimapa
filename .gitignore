@@ -1,0 +1,39 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+build/
+
+# Logs
+*.log
+vite.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# Cache de herramientas
+.vite/
+.cache/
+.DS_Store
+Thumbs.db
+
+# Temporales de Supabase
+**/.temp/
+
+# Carpeta anidada creada por error (clon residual)
+Proyecto Minimapa/Minimapa/
+
+# Editores
+.idea/
+*.swp
+*.swo
+
+# Salidas de cobertura / pruebas
+coverage/

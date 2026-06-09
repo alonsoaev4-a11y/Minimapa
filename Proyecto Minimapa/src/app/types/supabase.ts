@@ -8,6 +8,7 @@ export interface Advisor {
   email: string;
   phone: string;
   photo_url: string | null;
+  pin_color?: string | null;
   academic_program_id?: string | null;
   academic_program?: AcademicProgram | null;
   created_at: string;
