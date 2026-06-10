@@ -16,7 +16,9 @@
 --    TIMESTAMPTZ / trigger  -> DATETIME + ON UPDATE CURRENT_TIMESTAMP
 --    JSONB -> JSON | DOUBLE PRECISION -> DOUBLE | CHECK -> ENUM
 --  OMITIDO (especifico de Supabase): RLS/POLICY, storage.buckets, NOTIFY.
---  Las fotos se conservan como URL en las columnas *_url (igual que la app).
+--  FOTOS: se conservan como URL en las columnas *_url (igual que la app) y,
+--  ademas, los bytes reales se incrustan en columnas LONGBLOB (*_blob) via
+--  el script embed_photos_blob.py -> la BD queda autosuficiente.
 -- =====================================================================
 
 CREATE DATABASE IF NOT EXISTS `minimapa`
@@ -48,6 +50,8 @@ CREATE TABLE `advisors` (
   `email`               VARCHAR(255) NOT NULL DEFAULT '',
   `phone`               VARCHAR(50)  NOT NULL DEFAULT '',
   `photo_url`           MEDIUMTEXT   NULL,
+  `photo_blob`          LONGBLOB     NULL,
+  `photo_mime`          VARCHAR(100) NULL,
   `pin_color`           VARCHAR(20)  NULL,
   `academic_program_id` CHAR(36)     NULL,
   `created_at`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -66,6 +70,8 @@ CREATE TABLE `macs` (
   `details`    TEXT         NOT NULL,
   `schedule`   VARCHAR(255) NOT NULL,
   `image_url`  MEDIUMTEXT   NULL,
+  `image_blob` LONGBLOB     NULL,
+  `image_mime` VARCHAR(100) NULL,
   `advisor_id` CHAR(36)     NULL,
   `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -79,6 +85,8 @@ CREATE TABLE `mac_images` (
   `id`         CHAR(36)   NOT NULL DEFAULT (UUID()),
   `mac_id`     CHAR(36)   NOT NULL,
   `photo_url`  MEDIUMTEXT NOT NULL,
+  `photo_blob` LONGBLOB   NULL,
+  `photo_mime` VARCHAR(100) NULL,
   `sort_order` INT        NOT NULL DEFAULT 0,
   `created_at` DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
