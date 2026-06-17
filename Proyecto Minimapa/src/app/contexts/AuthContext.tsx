@@ -14,7 +14,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const ADMIN_CREDENTIALS = {
   email: 'alonsouas1006@gmail.com',
-  password: 'mac_uas2029'
+  password: 'Alonso123'
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

@@ -10,14 +10,14 @@ import type { MacWithAdvisor, PoiType } from '../types/supabase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { POI_CATALOG_MAP } from '../data/poiCatalog';
 
-// Light theme map styling (Institutional UI)
+// Dark theme map styling (Institutional UI)
 const mapStyles = `
   .leaflet-popup-content-wrapper {
     background-color: #ffffff !important;
     color: #1f2937 !important;
     border-radius: 12px !important;
     border: 1px solid #e5e7eb !important;
-    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1) !important;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3) !important;
     padding: 0 !important;
   }
   .leaflet-popup-tip {
@@ -80,9 +80,11 @@ interface MapComponentProps {
   selectedMacId?: number | string | null;
   onSelectMac?: (id: number | string) => void;
   disableControls?: boolean;
+  showAllMacs?: boolean;
+  onShowAllMacsChange?: (value: boolean) => void;
 }
 
-export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMacId, onSelectMac, disableControls = false }) => {
+export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMacId, onSelectMac, disableControls = false, showAllMacs: externalShowAllMacs = false, onShowAllMacsChange }) => {
   const [activeMac, setActiveMac] = useState<MacWithAdvisor | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeCenter, setActiveCenter] = useState<[number, number]>([25.7904, -108.9858]);
@@ -148,6 +150,11 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
     return () => navigator.geolocation.clearWatch(watchId);
   }, [activeMac]);
 
+  // Sincronizar showAllMacs con la prop externa
+  useEffect(() => {
+    setShowAllMacs(externalShowAllMacs);
+  }, [externalShowAllMacs]);
+
   const handleNavigate = (mac: MacWithAdvisor) => {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${mac.lat},${mac.lng}`, '_blank');
   };
@@ -156,13 +163,24 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
     ? [...activeMac.pois].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     : [];
   const advisorsList = useMemo(() => {
-    const byId = new Map<string, NonNullable<MacWithAdvisor['advisor']>>();
-    markers.forEach((m) => { if (m.advisor) byId.set(m.advisor.id, m.advisor); });
+    const byId = new Map<string, any>();
+    markers.forEach((m) => {
+      if (m.advisors && Array.isArray(m.advisors)) {
+        m.advisors.forEach((advisor) => {
+          if (advisor && !byId.has(advisor.id)) {
+            byId.set(advisor.id, advisor);
+          }
+        });
+      }
+    });
     return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [markers]);
 
   const filteredMarkers = useMemo(
-    () => (advisorFilter === 'all' ? markers : markers.filter((m) => m.advisor?.id === advisorFilter)),
+    () => {
+      if (advisorFilter === 'all') return markers;
+      return markers.filter((m) => m.advisors && m.advisors.some((advisor) => advisor.id === advisorFilter));
+    },
     [markers, advisorFilter],
   );
 
@@ -170,11 +188,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
   const shouldShowAllPins = showAllMacs || isFilteringByAdvisor;
   const visibleMarkers = shouldShowAllPins ? filteredMarkers : (activeMac ? [activeMac] : []);
   const getMacGallery = (mac: MacWithAdvisor) => {
-    if (mac.mac_images && mac.mac_images.length > 0) return mac.mac_images;
-    if (mac.image_url) {
-      return [{ id: `single-${mac.id}`, mac_id: String(mac.id), photo_url: mac.image_url, sort_order: 0, created_at: mac.created_at }];
-    }
-    return [];
+    return mac.mac_images && mac.mac_images.length > 0 ? mac.mac_images : [];
   };
 
   return (
@@ -262,7 +276,10 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
               </div>
               <Switch
                 checked={showAllMacs}
-                onCheckedChange={setShowAllMacs}
+                onCheckedChange={(checked) => {
+                  setShowAllMacs(checked);
+                  onShowAllMacsChange?.(checked);
+                }}
                 className="data-[state=checked]:bg-[#002D72] shrink-0"
               />
             </div>
@@ -293,7 +310,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">Carto</a> &copy; OSM'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png"
         />
 
         <MapUpdater activeCenter={activeCenter} />
@@ -305,7 +322,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
               key={mac.id}
               ref={(r) => { if (r) markerRefs.current[mac.id] = r; }}
               position={[mac.lat, mac.lng]}
-              icon={createMacIcon(activeMac?.id === mac.id, mac.advisor?.pin_color || '#002D72')}
+              icon={createMacIcon(activeMac?.id === mac.id, mac.advisors?.[0]?.pin_color || '#002D72')}
               eventHandlers={{
                 click: () => {
                   setActiveMac(mac);
@@ -325,23 +342,33 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                     <p className="text-xs text-gray-500 mt-1">{mac.details}</p>
 
                     <div className="mt-4 bg-gray-50 p-3.5 rounded-xl border border-gray-100">
-                      {mac.advisor ? (
-                        <div className="flex items-center gap-3">
-                          {mac.advisor.photo_url ? (
-                            <img
-                              src={mac.advisor.photo_url}
-                              alt={`${mac.advisor.title} ${mac.advisor.name}`}
-                              className="w-20 h-20 rounded-full object-cover border-[3px] border-[#002D72]/25 shadow-sm"
-                            />
-                          ) : (
-                            <div className="w-20 h-20 rounded-full bg-[#002D72] flex items-center justify-center text-white font-bold text-lg border-[3px] border-[#F2A900]">
-                              {mac.advisor.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('')}
+                      {mac.advisors && mac.advisors.length > 0 ? (
+                        <div className="space-y-3">
+                          {mac.advisors.map((advisor, index) => (
+                            <div key={advisor.id}>
+                              <div className="flex items-center gap-3">
+                                {advisor.photo_url ? (
+                                  <img
+                                    src={advisor.photo_url}
+                                    alt={`${advisor.title} ${advisor.name}`}
+                                    className="w-16 h-16 rounded-full object-cover border-[3px] border-[#002D72]/25 shadow-sm"
+                                  />
+                                ) : (
+                                  <div className="w-16 h-16 rounded-full bg-[#002D72] flex items-center justify-center text-white font-bold text-sm border-[3px] border-[#F2A900]">
+                                    {advisor.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('')}
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="text-[10px] text-gray-500 block font-normal mb-0.5">{mac.advisors.length > 1 ? `Encargado ${index + 1}` : 'Encargado'}</span>
+                                  <span className="text-sm font-semibold text-gray-800 leading-tight block">{advisor.title} {advisor.name}</span>
+                                  {advisor.academic_program?.name && (
+                                    <span className="text-[11px] text-gray-600">{advisor.academic_program.name}</span>
+                                  )}
+                                </div>
+                              </div>
+                              {index < mac.advisors.length - 1 && <div className="w-full h-px bg-gray-200 my-2"></div>}
                             </div>
-                          )}
-                          <div>
-                            <span className="text-[10px] text-gray-500 block font-normal mb-0.5">Encargado</span>
-                            <span className="text-base font-semibold text-gray-800 leading-tight block">{mac.advisor.title} {mac.advisor.name}</span>
-                          </div>
+                          ))}
                         </div>
                       ) : (
                         <p className="text-sm text-gray-400 italic">Sin encargado asignado</p>
@@ -353,16 +380,6 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                         <span className="text-[10px] text-gray-500 block font-normal mb-0.5">Horario de Oficina</span>
                         <span className="text-sm font-semibold text-gray-800">{mac.schedule}</span>
                       </div>
-
-                      {mac.advisor?.academic_program?.name && (
-                        <>
-                          <div className="w-full h-px bg-gray-200 my-3"></div>
-                          <div>
-                            <span className="text-[10px] text-gray-500 block font-normal mb-0.5">Formación Académica</span>
-                            <span className="text-sm font-semibold text-gray-800">{mac.advisor.academic_program.name}</span>
-                          </div>
-                        </>
-                      )}
 
                       {mac.name.toLowerCase() !== 'los mochis' && (
                         <>

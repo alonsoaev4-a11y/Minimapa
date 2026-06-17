@@ -49,17 +49,19 @@ export interface Mac {
   lng: number;
   details: string;
   schedule: string;
-  image_url: string | null;
-  advisor_id: string | null;
   created_at: string;
-  advisor?: Advisor;
+  advisors?: Advisor[];
   mac_images?: MacImage[];
   pois?: Poi[];
+  pin_color?: string | null;
 }
 
-export interface MacWithAdvisor extends Mac {
-  advisor: Advisor | null;
+export interface MacWithAdvisors extends Mac {
+  advisors: Advisor[];
 }
+
+// Legacy type for backward compatibility
+export type MacWithAdvisor = MacWithAdvisors;
 
 export interface AdminUser {
   id: string;

@@ -56,8 +56,7 @@ export const AdminDashboard: React.FC = () => {
     lng: '',
     details: '',
     schedule: '',
-    image_url: '',
-    advisor_id: 'none'
+    advisor_ids: [] as string[]
   });
   const [macPhotoFiles, setMacPhotoFiles] = useState<File[]>([]);
   const [macPhotoPreviews, setMacPhotoPreviews] = useState<string[]>([]);
@@ -124,20 +123,29 @@ export const AdminDashboard: React.FC = () => {
       })));
     } else {
       const [macsResult, advisorsResult, programsResult, transportResult] = await Promise.all([
-        supabase.from('macs').select('*, advisor:advisors(*, academic_program:academic_programs(*)), mac_images(*), pois(*)'),
+        supabase.from('macs').select('*, advisors:mac_advisors(advisor:advisors(*, academic_program:academic_programs(*))), mac_images(*), pois(*)'),
         supabase.from('advisors').select('*, academic_program:academic_programs(*)'),
         supabase.from('academic_programs').select('*').order('name', { ascending: true }),
         supabase.from('transport_info').select('*').order('mac_name', { ascending: true })
       ]);
 
       if (macsResult.data) {
-        setMacs(applyPinColorsToMacs(macsResult.data as MacWithAdvisor[]));
+        // Transform the data to flatten the nested structure
+        const transformedData = (macsResult.data as any[]).map(mac => ({
+          ...mac,
+          advisors: (mac.advisors || []).map((item: any) => item.advisor).filter(Boolean)
+        }));
+        setMacs(applyPinColorsToMacs(transformedData as MacWithAdvisor[]));
       } else {
         const { data: macsFallback } = await supabase
           .from('macs')
-          .select('*, advisor:advisors(*, academic_program:academic_programs(*)), mac_images(*)');
+          .select('*, advisors:mac_advisors(advisor:advisors(*, academic_program:academic_programs(*))), mac_images(*)');
         if (macsFallback) {
-          const fallbackWithoutPois = (macsFallback as MacWithAdvisor[]).map((mac) => ({ ...mac, pois: [] }));
+          const transformedData = (macsFallback as any[]).map(mac => ({
+            ...mac,
+            advisors: (mac.advisors || []).map((item: any) => item.advisor).filter(Boolean)
+          }));
+          const fallbackWithoutPois = transformedData.map((mac) => ({ ...mac, pois: [] }));
           setMacs(applyPinColorsToMacs(fallbackWithoutPois));
         }
       }
@@ -228,25 +236,29 @@ export const AdminDashboard: React.FC = () => {
     try {
       const isEditing = Boolean(editingMac);
       const macData = {
-        name: macForm.name,
+        name: macForm.name.trim(),
         lat: parseFloat(macForm.lat),
         lng: parseFloat(macForm.lng),
-        details: macForm.details,
-        schedule: macForm.schedule,
-        image_url: macForm.image_url || null,
-        advisor_id: macForm.advisor_id === 'none' ? null : macForm.advisor_id || null
+        details: macForm.details.trim(),
+        schedule: macForm.schedule.trim()
       };
+
+      // Validar coordenadas
+      if (isNaN(macData.lat) || isNaN(macData.lng)) {
+        throw new Error('Latitud y Longitud deben ser números válidos');
+      }
 
       if (!isSupabaseConfigured()) {
         let newMacs = [...macs];
         const localMacId = editingMac?.id || crypto.randomUUID();
         const normalizedPois = normalizePoisFromForm(localMacId);
+        const selectedAdvisors = advisors.filter(a => macForm.advisor_ids.includes(a.id));
         if (editingMac) {
           newMacs = newMacs.map(m => m.id === editingMac.id ? {
             ...m,
             ...macData,
             pois: normalizedPois,
-            advisor: advisors.find(a => a.id === macData.advisor_id) || null,
+            advisors: selectedAdvisors,
           } : m);
         } else {
           const newMac: MacWithAdvisor = {
@@ -254,7 +266,7 @@ export const AdminDashboard: React.FC = () => {
             ...macData,
             created_at: new Date().toISOString(),
             pois: normalizedPois,
-            advisor: advisors.find(a => a.id === macData.advisor_id) || null
+            advisors: selectedAdvisors
           };
           newMacs.push(newMac);
         }
@@ -272,13 +284,40 @@ export const AdminDashboard: React.FC = () => {
 
         let targetMacId = editingMac?.id || '';
         if (editingMac) {
-          const { error: updateError } = await supabase.from('macs').update(macData).eq('id', editingMac.id);
+          const { data, error: updateError } = await supabase
+            .from('macs')
+            .update(macData)
+            .eq('id', editingMac.id)
+            .select('id');
           if (updateError) throw updateError;
+          if (!data || data.length === 0) {
+            throw new Error(`MAC con ID ${editingMac.id} no se actualizó. Verifica permisos de RLS.`);
+          }
           targetMacId = editingMac.id;
+          
+          // Delete existing mac_advisors relationships
+          const { error: deleteError } = await supabase
+            .from('mac_advisors')
+            .delete()
+            .eq('mac_id', targetMacId);
+          if (deleteError) throw deleteError;
         } else {
           const { data: inserted, error: insertError } = await supabase.from('macs').insert(macData).select('id').single();
           if (insertError) throw insertError;
           targetMacId = inserted.id;
+        }
+
+        // Insert new mac_advisors relationships
+        if (macForm.advisor_ids.length > 0) {
+          const macAdvisorsToInsert = macForm.advisor_ids.map((advisorId, index) => ({
+            mac_id: targetMacId,
+            advisor_id: advisorId,
+            sort_order: index
+          }));
+          const { error: insertError } = await supabase
+            .from('mac_advisors')
+            .insert(macAdvisorsToInsert);
+          if (insertError) throw insertError;
         }
 
         if (macPhotoFiles.length > 0 && targetMacId) {
@@ -292,13 +331,7 @@ export const AdminDashboard: React.FC = () => {
             if (imageInsertError) throw imageInsertError;
           }
 
-          if (uploadedUrls.length > 0) {
-            const { error: coverUpdateError } = await supabase
-              .from('macs')
-              .update({ image_url: uploadedUrls[0] })
-              .eq('id', targetMacId);
-            if (coverUpdateError) throw coverUpdateError;
-          }
+          // Images are now stored in mac_images table only
         }
 
         if (targetMacId) {
@@ -515,8 +548,21 @@ export const AdminDashboard: React.FC = () => {
       if (!isSupabaseConfigured()) {
         let newAdvisors = [...advisors];
         if (editingAdvisor) {
-          newAdvisors = newAdvisors.map(a => a.id === editingAdvisor.id ? { ...a, ...advisorData, academic_program: selectedProgram } : a);
-          const newMacs = macs.map(m => m.advisor_id === editingAdvisor.id ? { ...m, advisor: newAdvisors.find(a => a.id === editingAdvisor.id) } : m);
+          newAdvisors = newAdvisors.map(a => a.id === editingAdvisor.id ? { 
+            ...a, 
+            ...advisorData, 
+            academic_program: selectedProgram || a.academic_program 
+          } : a);
+          const newMacs = macs.map(m => {
+            // Update advisors in this MAC if it includes the edited advisor
+            if (m.advisors && m.advisors.some(a => a.id === editingAdvisor.id)) {
+              return {
+                ...m,
+                advisors: m.advisors.map(a => a.id === editingAdvisor.id ? newAdvisors.find(na => na.id === editingAdvisor.id) || a : a)
+              };
+            }
+            return m;
+          });
           setMacs(newMacs);
           saveToLocalStorage(newMacs, newAdvisors, transportInfos, effectivePrograms);
           savePinColorOverlay(editingAdvisor.id, advisorForm.pin_color);
@@ -535,14 +581,15 @@ export const AdminDashboard: React.FC = () => {
         toast.success(isEditing ? 'Asesor actualizado correctamente' : 'Asesor creado correctamente');
       } else {
         if (editingAdvisor) {
-          let { error: updateError } = await supabase.from('advisors').update(advisorData).eq('id', editingAdvisor.id);
-          if (updateError && isMissingPinColorError(updateError)) {
-            // La columna pin_color aún no existe en Supabase: guardamos el
-            // resto de los datos y conservamos el color en el respaldo local.
-            const { pin_color, ...advisorDataNoColor } = advisorData;
-            ({ error: updateError } = await supabase.from('advisors').update(advisorDataNoColor).eq('id', editingAdvisor.id));
-          }
+          let { data, error: updateError } = await supabase
+            .from('advisors')
+            .update(advisorData)
+            .eq('id', editingAdvisor.id)
+            .select('id');
           if (updateError) throw updateError;
+          if (!data || data.length === 0) {
+            throw new Error(`Asesor con ID ${editingAdvisor.id} no se actualizó. Verifica permisos de RLS.`);
+          }
           savePinColorOverlay(editingAdvisor.id, advisorForm.pin_color);
         } else {
           let { data: insertedAdvisor, error: insertError } = await supabase
@@ -728,17 +775,15 @@ export const AdminDashboard: React.FC = () => {
 
       if (!isSupabaseConfigured()) {
         const newAdvisors = advisors.filter(a => a.id !== id);
-        const newMacs = macs.map(m => m.advisor_id === id ? { ...m, advisor_id: null, advisor: null } : m);
+        const newMacs = macs.map(m => ({
+          ...m,
+          advisors: m.advisors ? m.advisors.filter(a => a.id !== id) : []
+        }));
         setAdvisors(newAdvisors);
         setMacs(newMacs);
         saveToLocalStorage(newMacs, newAdvisors);
       } else {
-        const { error: unassignError } = await supabase
-          .from('macs')
-          .update({ advisor_id: null })
-          .eq('advisor_id', id);
-        if (unassignError) throw unassignError;
-
+        // The cascade delete on mac_advisors will handle removing the relationships
         const { error: deleteError } = await supabase.from('advisors').delete().eq('id', id);
         if (deleteError) throw deleteError;
 
@@ -770,14 +815,14 @@ export const AdminDashboard: React.FC = () => {
           image_url: poi.image_url || '',
         })),
     );
+    const advisorIds = (mac.advisors || []).map(a => a.id);
     setMacForm({
       name: mac.name,
       lat: mac.lat.toString(),
       lng: mac.lng.toString(),
       details: mac.details,
       schedule: mac.schedule,
-      image_url: mac.image_url || '',
-      advisor_id: mac.advisor_id || 'none'
+      advisor_ids: advisorIds
     });
     setMacModalOpen(true);
   };
@@ -807,7 +852,7 @@ export const AdminDashboard: React.FC = () => {
     setMacPhotoPreviews([]);
     setMacPoisForm([]);
     setCoordinatePickerTarget({ kind: 'mac' });
-    setMacForm({ name: '', lat: '', lng: '', details: '', schedule: '', image_url: '', advisor_id: 'none' });
+    setMacForm({ name: '', lat: '', lng: '', details: '', schedule: '', advisor_ids: [] });
   };
 
   const resetAdvisorForm = () => {
@@ -915,8 +960,8 @@ export const AdminDashboard: React.FC = () => {
                         <tr key={mac.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              {mac.image_url && (
-                                <img src={mac.image_url} alt={mac.name} className="w-10 h-10 rounded-lg object-cover" />
+                              {mac.mac_images && mac.mac_images.length > 0 && (
+                                <img src={mac.mac_images[0].photo_url} alt={mac.name} className="w-10 h-10 rounded-lg object-cover" />
                               )}
                               <div>
                                 <p className="font-medium text-gray-900">{mac.name}</p>
@@ -927,15 +972,19 @@ export const AdminDashboard: React.FC = () => {
                           <td className="px-6 py-4 text-sm text-gray-600">
                             {mac.lat.toFixed(4)}, {mac.lng.toFixed(4)}
                           </td>
-                            <td className="px-6 py-4">
-                              {mac.advisor ? (
-                                <span className="inline-flex items-center gap-1 text-sm">
-                                  {mac.advisor.title} {mac.advisor.name}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 text-sm">Sin asignar</span>
-                              )}
-                            </td>
+                          <td className="px-6 py-4">
+                            {mac.advisors && mac.advisors.length > 0 ? (
+                              <div className="space-y-1">
+                                {mac.advisors.map((advisor) => (
+                                  <span key={advisor.id} className="block text-sm">
+                                    {advisor.title} {advisor.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">Sin asignar</span>
+                            )}
+                          </td>
                             <td className="px-6 py-4">
                               <span className="inline-flex items-center justify-center min-w-8 px-2 py-1 rounded-full text-xs font-semibold bg-[#002D72]/10 text-[#002D72] border border-[#002D72]/15">
                                 {mac.pois?.length || 0}
@@ -994,7 +1043,7 @@ export const AdminDashboard: React.FC = () => {
                       </tr>
                     ) : (
                       advisors.map((advisor) => {
-                        const assignedMacs = macs.filter(m => m.advisor_id === advisor.id);
+                        const assignedMacs = macs.filter(m => m.advisors && m.advisors.some(a => a.id === advisor.id));
                         return (
                           <tr key={advisor.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4">
@@ -1319,18 +1368,39 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Asesor Asignado</Label>
-              <Select value={macForm.advisor_id} onValueChange={(v) => setMacForm({ ...macForm, advisor_id: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar asesor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin asignar</SelectItem>
-                  {advisors.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>{a.title} {a.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Asesores Asignados</Label>
+              <div className="border border-gray-200 rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
+                {advisors.length === 0 ? (
+                  <p className="text-sm text-gray-500">Sin asesores registrados</p>
+                ) : (
+                  advisors.map((advisor) => (
+                    <div key={advisor.id} className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id={`advisor-${advisor.id}`}
+                        checked={macForm.advisor_ids.includes(advisor.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setMacForm({
+                              ...macForm,
+                              advisor_ids: [...macForm.advisor_ids, advisor.id]
+                            });
+                          } else {
+                            setMacForm({
+                              ...macForm,
+                              advisor_ids: macForm.advisor_ids.filter(id => id !== advisor.id)
+                            });
+                          }
+                        }}
+                        className="w-4 h-4 border-gray-300 rounded text-[#002D72]"
+                      />
+                      <label htmlFor={`advisor-${advisor.id}`} className="flex-1 text-sm cursor-pointer">
+                        {advisor.title} {advisor.name}
+                      </label>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
           <DialogFooter>

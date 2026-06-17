@@ -8,7 +8,7 @@ const mysql  = require('mysql2/promise');
 const crypto = require('crypto');
 
 const ADMIN_EMAIL = 'alonsouas1006@gmail.com';
-const ADMIN_PASS  = 'mac_uas2029';
+const ADMIN_PASS  = 'Alonso123';
 
 function hashPassword(pass) {
   return crypto.createHash('sha256').update(pass).digest('hex');

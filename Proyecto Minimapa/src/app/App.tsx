@@ -17,6 +17,7 @@ const AppContent: React.FC = () => {
   const [selectedMacId, setSelectedMacId] = useState<string | number | null>(null);
   const [showTransportMap, setShowTransportMap] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [showAllMacs, setShowAllMacs] = useState(false);
   const [macs, setMacs] = useState<MacWithAdvisor[]>([]);
   const [macsLoading, setMacsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
@@ -31,18 +32,27 @@ const AppContent: React.FC = () => {
       } else {
         const { data, error } = await supabase
           .from('macs')
-          .select('*, advisor:advisors(*, academic_program:academic_programs(*)), mac_images(*), pois(*)')
+          .select('*, advisors:mac_advisors(advisor:advisors(*, academic_program:academic_programs(*))), mac_images(*), pois(*)')
           .order('name', { ascending: true });
         if (data && !error) {
-          setMacs(applyPinColorsToMacs(data as MacWithAdvisor[]));
+          // Transform the data to match MacWithAdvisor type
+          const transformedData = (data as any[]).map(mac => ({
+            ...mac,
+            advisors: (mac.advisors || []).map((item: any) => item.advisor).filter(Boolean)
+          }));
+          setMacs(applyPinColorsToMacs(transformedData as MacWithAdvisor[]));
         } else {
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('macs')
-            .select('*, advisor:advisors(*, academic_program:academic_programs(*)), mac_images(*)')
+            .select('*, advisors:mac_advisors(advisor:advisors(*, academic_program:academic_programs(*))), mac_images(*)')
             .order('name', { ascending: true });
 
           if (fallbackData && !fallbackError) {
-            const fallbackWithoutPois = (fallbackData as MacWithAdvisor[]).map((mac) => ({ ...mac, pois: [] }));
+            const transformedData = (fallbackData as any[]).map(mac => ({
+              ...mac,
+              advisors: (mac.advisors || []).map((item: any) => item.advisor).filter(Boolean)
+            }));
+            const fallbackWithoutPois = transformedData.map((mac) => ({ ...mac, pois: [] }));
             setMacs(applyPinColorsToMacs(fallbackWithoutPois));
           } else {
             setMacs([]);
@@ -66,12 +76,16 @@ const AppContent: React.FC = () => {
         <header className="bg-white shadow-sm border-b border-gray-200 z-10 relative">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 sm:h-20 py-2 sm:py-0 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-[#002D72] flex items-center justify-center font-black font-heading text-[#F2A900] text-base sm:text-xl tracking-tighter shadow-md shrink-0">
-                UAS
-              </div>
+              <div className="shrink-0">
+        <img
+        src="/logo-subdireccion.png"
+       alt="Subdirección Servicio Social UAS"
+        className="h-16 w-16 sm:h-20 sm:w-20 rounded-full object-cover border-2 border-[#F2A900] shadow-md"
+      />
+      </div>
               <div className="min-w-0">
                 <h1 className="text-base sm:text-xl md:text-2xl font-bold font-heading text-[#002D72] tracking-tight truncate">
-                  Servicio Social <span className="text-[#F2A900]">UAS</span>
+                  Subdireccion Servicio Social URN <span className="text-[#F2A900]">UAS</span>
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-500 font-medium hidden sm:flex items-center gap-1.5 mt-0.5">
                   Módulos de Atención Comunitaria (MAC)
@@ -80,6 +94,18 @@ const AppContent: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+              <button
+                onClick={() => setShowAllMacs(!showAllMacs)}
+                aria-label="Ver todos los módulos"
+                className={`flex items-center gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border ${
+                  showAllMacs
+                    ? 'bg-[#002D72] text-white border-[#002D72]'
+                    : 'text-[#002D72] border-[#002D72]/20 hover:bg-[#002D72]/5'
+                }`}
+              >
+                <Layers size={18} />
+                <span className="hidden sm:inline">Ver todos</span>
+              </button>
               <button
                 onClick={() => setShowTransportMap(!showTransportMap)}
                 aria-label="Transporte"
@@ -200,6 +226,8 @@ const AppContent: React.FC = () => {
                   selectedMacId={selectedMacId}
                   onSelectMac={(id) => setSelectedMacId(id)}
                   disableControls={showAdminLogin}
+                  showAllMacs={showAllMacs}
+                  onShowAllMacsChange={setShowAllMacs}
                 />
               </section>
             </div>
@@ -227,9 +255,13 @@ const AppContent: React.FC = () => {
       <header className="bg-[#002D72] text-white shadow-lg sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 sm:h-20 py-2 sm:py-0 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center font-black font-heading text-[#002D72] text-base sm:text-xl tracking-tighter shadow-md border-2 border-[#F2A900] shrink-0">
-              UAS
-            </div>
+            <div className="shrink-0">
+        <img
+          src="/logo-subdireccion.png"
+          alt="Subdirección Servicio Social UAS"
+          className="h-10 sm:h-12 w-auto object-contain"
+        />
+      </div>
             <div className="min-w-0">
               <h1 className="text-xs sm:text-base md:text-lg font-bold font-heading text-white tracking-tight leading-none truncate">
                 Dirección General de

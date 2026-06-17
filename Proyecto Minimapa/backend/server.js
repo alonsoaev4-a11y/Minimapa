@@ -116,12 +116,19 @@ function parseSelectRelations(sel) {
  */
 const RELS = {
   macs: {
-    advisors:       { type: 'object', fk: 'advisor_id',         refTable: 'advisors',        refKey: 'id'     },
+    // Multi-asesor via tabla intermedia: advisors:mac_advisors(advisor:advisors(...))
+    mac_advisors:   { type: 'array',  fk: 'id',                 refTable: 'mac_advisors',    refKey: 'mac_id' },
     mac_images:     { type: 'array',  fk: 'id',                 refTable: 'mac_images',      refKey: 'mac_id' },
     pois:           { type: 'array',  fk: 'id',                 refTable: 'pois',            refKey: 'mac_id' },
   },
+  mac_advisors: {
+    // advisor:advisors(*) dentro de mac_advisors
+    advisor:        { type: 'object', fk: 'advisor_id',         refTable: 'advisors',        refKey: 'id'     },
+    advisors:       { type: 'object', fk: 'advisor_id',         refTable: 'advisors',        refKey: 'id'     },
+  },
   advisors: {
     academic_programs: { type: 'object', fk: 'academic_program_id', refTable: 'academic_programs', refKey: 'id' },
+    academic_program:  { type: 'object', fk: 'academic_program_id', refTable: 'academic_programs', refKey: 'id' },
   },
 };
 
@@ -361,7 +368,7 @@ pool.getConnection().then(conn => {
     console.log('║  Minimapa Backend  →  http://localhost:' + PORT + '  ║');
     console.log('╠══════════════════════════════════════════════╣');
     console.log('║  DB   : MySQL 8 · minimapa                   ║');
-    console.log('║  Admin: alonsouas1006@gmail.com              ║');
+    console.log('║  Admin: alonsouas1006@gmail.com / Alonso123  ║');
     console.log('║  Auth : MySQL admin_users table              ║');
     console.log('╚══════════════════════════════════════════════╝');
     console.log('');
