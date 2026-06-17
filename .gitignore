@@ -30,6 +30,9 @@ Thumbs.db
 # Carpeta anidada creada por error (clon residual)
 Proyecto Minimapa/Minimapa/
 
+# Fotos subidas al backend (binarios grandes, no van en git)
+Proyecto Minimapa/backend/uploads/
+
 # Editores
 .idea/
 *.swp
