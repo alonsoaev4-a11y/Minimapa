@@ -164,6 +164,18 @@ async function loadRelations(tableName, rows, relDefs) {
   return rows;
 }
 
+/** Elimina columnas BLOB (Buffer) de las respuestas — no las necesita el frontend */
+function stripBlobs(obj) {
+  if (Buffer.isBuffer(obj)) return null;
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(stripBlobs);
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = Buffer.isBuffer(v) ? null : (v && typeof v === 'object' ? stripBlobs(v) : v);
+  }
+  return out;
+}
+
 /** Reescribe URLs de Supabase Storage a localhost para que las fotos carguen local */
 function localizeUrls(obj) {
   if (!obj || typeof obj !== 'object') return obj;
@@ -276,7 +288,7 @@ app.get('/rest/v1/:table', async (req, res) => {
     const [rows] = await pool.query(`SELECT * FROM \`${table}\` ${where} ${ord} ${lim} ${off}`, values);
     const rels   = parseSelectRelations(select);
     const result = await loadRelations(table, rows, rels);
-    const local  = localizeUrls(result);
+    const local  = localizeUrls(stripBlobs(result));
     if ((req.headers['prefer'] || '').includes('count=exact'))
       res.set('Content-Range', `0-${local.length > 0 ? local.length - 1 : 0}/${local.length}`);
     res.json(local);

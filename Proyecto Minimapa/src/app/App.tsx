@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { applyPinColorsToMacs } from './lib/pinColors';
 import type { MacWithAdvisor } from './types/supabase';
-import { MapPin, Building, ArrowLeft, GraduationCap, ChevronDown, Shield, Bus, Loader2, Compass, Users, Navigation, Sparkles, ArrowRight, Layers, Building2, Search, HeartHandshake } from 'lucide-react';
+import { MapPin, Building, ArrowLeft, GraduationCap, ChevronDown, Shield, Bus, Loader2, Compass, Users, Navigation, Sparkles, ArrowRight, Layers, Building2, Search, HeartHandshake, Sun, Moon } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { POI_CATALOG } from './data/poiCatalog';
 
@@ -18,6 +18,7 @@ const AppContent: React.FC = () => {
   const [showTransportMap, setShowTransportMap] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showAllMacs, setShowAllMacs] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [macs, setMacs] = useState<MacWithAdvisor[]>([]);
   const [macsLoading, setMacsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
@@ -72,8 +73,8 @@ const AppContent: React.FC = () => {
 
   if (showMap) {
     return (
-      <div className="min-h-screen bg-[#f8afc] text-gray-900 font-sans flex flex-col">
-        <header className="bg-white shadow-sm border-b border-gray-200 z-10 relative">
+      <div className={`min-h-screen font-sans flex flex-col transition-colors duration-300 ${darkMode ? 'bg-[#0f172a] text-white' : 'bg-gray-50 text-gray-900'}`}>
+        <header className={`shadow-sm border-b z-10 relative transition-colors duration-300 ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-gray-200'}`}>
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 sm:h-20 py-2 sm:py-0 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <div className="shrink-0">
@@ -84,16 +85,27 @@ const AppContent: React.FC = () => {
       />
       </div>
               <div className="min-w-0">
-                <h1 className="text-base sm:text-xl md:text-2xl font-bold font-heading text-[#002D72] tracking-tight truncate">
+                <h1 className={`text-base sm:text-xl md:text-2xl font-bold font-heading tracking-tight truncate ${darkMode ? 'text-white' : 'text-[#002D72]'}`}>
                   Subdireccion Servicio Social URN <span className="text-[#F2A900]">UAS</span>
                 </h1>
-                <p className="text-xs sm:text-sm text-gray-500 font-medium hidden sm:flex items-center gap-1.5 mt-0.5">
+                <p className={`text-xs sm:text-sm font-medium hidden sm:flex items-center gap-1.5 mt-0.5 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
                   Módulos de Atención Comunitaria (MAC)
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                aria-label={darkMode ? 'Modo claro' : 'Modo oscuro'}
+                className={`flex items-center justify-center w-9 h-9 rounded-lg transition-colors border ${
+                  darkMode
+                    ? 'bg-[#F2A900] text-[#002D72] border-[#F2A900]'
+                    : 'text-[#002D72] border-[#002D72]/20 hover:bg-[#002D72]/5'
+                }`}
+              >
+                {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+              </button>
               <button
                 onClick={() => setShowAllMacs(!showAllMacs)}
                 aria-label="Ver todos los módulos"
@@ -144,12 +156,12 @@ const AppContent: React.FC = () => {
           ) : (
             <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
               <aside className="w-full lg:w-1/3 flex flex-col gap-4 sm:gap-6">
-                <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-[#002D72]/5 rounded-bl-full"></div>
-                  <h2 className="text-2xl font-bold text-[#002D72] mb-3 relative z-10">
+                <div className={`border p-6 rounded-2xl shadow-sm relative overflow-hidden transition-colors duration-300 ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-gray-200'}`}>
+                  <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-full ${darkMode ? 'bg-white/5' : 'bg-[#002D72]/5'}`}></div>
+                  <h2 className={`text-2xl font-bold mb-3 relative z-10 ${darkMode ? 'text-white' : 'text-[#002D72]'}`}>
                     Directorio de Módulos
                   </h2>
-                  <p className="text-gray-600 text-sm leading-relaxed mb-4 relative z-10">
+                  <p className={`text-sm leading-relaxed mb-4 relative z-10 ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>
                     Explora el mapa para localizar los Módulos de Atención Comunitaria (MAC). Selecciona un marcador para ver al asesor encargado, sus horarios y los puntos de interés cercanos.
                   </p>
 
@@ -200,8 +212,8 @@ const AppContent: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm flex flex-col gap-4">
-                  <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
+                <div className={`border p-6 rounded-2xl shadow-sm flex flex-col gap-4 transition-colors duration-300 ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-gray-200'}`}>
+                  <h3 className={`font-bold flex items-center gap-2 mb-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                     <Building size={18} className="text-gray-500" />
                     Simbología de Referencia
                   </h3>
@@ -228,6 +240,7 @@ const AppContent: React.FC = () => {
                   disableControls={showAdminLogin}
                   showAllMacs={showAllMacs}
                   onShowAllMacsChange={setShowAllMacs}
+                  darkMode={darkMode}
                 />
               </section>
             </div>

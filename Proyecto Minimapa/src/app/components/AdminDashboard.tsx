@@ -60,6 +60,7 @@ export const AdminDashboard: React.FC = () => {
   });
   const [macPhotoFiles, setMacPhotoFiles] = useState<File[]>([]);
   const [macPhotoPreviews, setMacPhotoPreviews] = useState<string[]>([]);
+  const [photosToDelete, setPhotosToDelete] = useState<string[]>([]);
 
   const [advisorForm, setAdvisorForm] = useState({
     title: 'Ing' as AdvisorTitle,
@@ -320,6 +321,17 @@ export const AdminDashboard: React.FC = () => {
           if (insertError) throw insertError;
         }
 
+        // Delete photos marked for removal
+        if (photosToDelete.length > 0) {
+          for (const photoId of photosToDelete) {
+            const { error: deletePhotoError } = await supabase
+              .from('mac_images')
+              .delete()
+              .eq('id', photoId);
+            if (deletePhotoError) throw deletePhotoError;
+          }
+        }
+
         if (macPhotoFiles.length > 0 && targetMacId) {
           const uploadedUrls: string[] = [];
           for (let i = 0; i < macPhotoFiles.length; i += 1) {
@@ -330,8 +342,6 @@ export const AdminDashboard: React.FC = () => {
               .insert({ mac_id: targetMacId, photo_url: photoUrl, sort_order: i });
             if (imageInsertError) throw imageInsertError;
           }
-
-          // Images are now stored in mac_images table only
         }
 
         if (targetMacId) {
@@ -801,6 +811,7 @@ export const AdminDashboard: React.FC = () => {
     setEditingMac(mac);
     setMacPhotoFiles([]);
     setMacPhotoPreviews([]);
+    setPhotosToDelete([]);
     setMacPoisForm(
       (mac.pois || [])
         .slice()
@@ -850,6 +861,7 @@ export const AdminDashboard: React.FC = () => {
     setEditingMac(null);
     setMacPhotoFiles([]);
     setMacPhotoPreviews([]);
+    setPhotosToDelete([]);
     setMacPoisForm([]);
     setCoordinatePickerTarget({ kind: 'mac' });
     setMacForm({ name: '', lat: '', lng: '', details: '', schedule: '', advisor_ids: [] });
@@ -1232,11 +1244,41 @@ export const AdminDashboard: React.FC = () => {
               )}
               {editingMac?.mac_images && editingMac.mac_images.length > 0 && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-2">Fotos actuales ({editingMac.mac_images.length})</p>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Fotos actuales ({editingMac.mac_images.filter(img => !photosToDelete.includes(img.id)).length})
+                    {photosToDelete.length > 0 && <span className="text-red-500 ml-1">· {photosToDelete.length} marcada{photosToDelete.length > 1 ? 's' : ''} para eliminar</span>}
+                  </p>
                   <div className="grid grid-cols-4 gap-2">
-                    {editingMac.mac_images.slice(0, 8).map((img) => (
-                      <img key={img.id} src={img.photo_url} alt="MAC" className="w-full h-16 object-cover rounded-md border border-gray-200" />
-                    ))}
+                    {editingMac.mac_images.slice(0, 8).map((img) => {
+                      const markedForDelete = photosToDelete.includes(img.id);
+                      return (
+                        <div key={img.id} className="relative group">
+                          <img
+                            src={img.photo_url}
+                            alt="MAC"
+                            className={`w-full h-16 object-cover rounded-md border transition-opacity ${
+                              markedForDelete ? 'opacity-30 border-red-400' : 'border-gray-200'
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPhotosToDelete(prev =>
+                                markedForDelete ? prev.filter(id => id !== img.id) : [...prev, img.id]
+                              )
+                            }
+                            className={`absolute inset-0 flex items-center justify-center rounded-md transition-opacity ${
+                              markedForDelete
+                                ? 'opacity-100 bg-red-500/20'
+                                : 'opacity-0 group-hover:opacity-100 bg-black/30'
+                            }`}
+                            title={markedForDelete ? 'Desmarcar' : 'Eliminar foto'}
+                          >
+                            <X className={`w-5 h-5 ${markedForDelete ? 'text-red-500' : 'text-white'}`} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

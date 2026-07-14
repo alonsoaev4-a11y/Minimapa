@@ -82,9 +82,10 @@ interface MapComponentProps {
   disableControls?: boolean;
   showAllMacs?: boolean;
   onShowAllMacsChange?: (value: boolean) => void;
+  darkMode?: boolean;
 }
 
-export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMacId, onSelectMac, disableControls = false, showAllMacs: externalShowAllMacs = false, onShowAllMacsChange }) => {
+export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMacId, onSelectMac, disableControls = false, showAllMacs: externalShowAllMacs = false, onShowAllMacsChange, darkMode = false }) => {
   const [activeMac, setActiveMac] = useState<MacWithAdvisor | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeCenter, setActiveCenter] = useState<[number, number]>([25.7904, -108.9858]);
@@ -203,10 +204,14 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
           onClick={() => setControlsOpen((prev) => !prev)}
           aria-label="Opciones del mapa"
           aria-expanded={controlsOpen}
-          className={`w-10 h-10 rounded-full bg-white shadow-lg border flex items-center justify-center transition-colors ${
+          className={`w-10 h-10 rounded-full shadow-lg border flex items-center justify-center transition-colors ${
+            darkMode ? 'bg-[#1e293b] border-slate-600' : 'bg-white'
+          } ${
             controlsOpen || isFilteringByAdvisor || showAllMacs
               ? 'border-[#002D72]/40 text-[#002D72]'
-              : 'border-gray-200 text-gray-600 hover:text-[#002D72] hover:border-[#002D72]/30'
+              : darkMode
+                ? 'text-slate-300 hover:text-white'
+                : 'border-gray-200 text-gray-600 hover:text-[#002D72] hover:border-[#002D72]/30'
           }`}
         >
           <MoreVertical className="w-5 h-5" />
@@ -217,25 +222,29 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
 
         {/* Panel desplegable */}
         {controlsOpen && (
-          <div className="absolute bottom-12 left-0 w-[calc(100vw-2rem)] max-w-xs sm:w-64 bg-white p-3 rounded-xl shadow-xl border border-gray-200 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <div className={`absolute bottom-12 left-0 w-[calc(100vw-2rem)] max-w-xs sm:w-64 p-3 rounded-xl shadow-xl border space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150 ${
+              darkMode ? 'bg-[#1e293b] border-slate-600' : 'bg-white border-gray-200'
+            }`}>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+              <span className={`text-xs font-semibold flex items-center gap-1.5 ${darkMode ? 'text-slate-200' : 'text-gray-700'}`}>
                 <Filter className="w-3.5 h-3.5 text-[#002D72]" /> Opciones del mapa
               </span>
               <button
                 type="button"
                 onClick={() => setControlsOpen(false)}
                 aria-label="Cerrar opciones"
-                className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                  darkMode ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-700' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="h-px bg-gray-100" />
+            <div className={`h-px ${darkMode ? 'bg-slate-600' : 'bg-gray-100'}`} />
 
             <div className="space-y-1.5">
-              <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
+              <span className={`text-xs font-medium flex items-center gap-1 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
                 <Filter className="w-3 h-3" /> Filtrar por asesor
               </span>
               <Select value={advisorFilter} onValueChange={setAdvisorFilter}>
@@ -258,7 +267,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                 </SelectContent>
               </Select>
               {advisorsList.length === 0 && (
-                <p className="text-xs text-gray-400">No hay asesores asignados a MACs.</p>
+                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>No hay asesores asignados a MACs.</p>
               )}
               {isFilteringByAdvisor && (
                 <p className="text-xs text-[#002D72]">
@@ -267,12 +276,12 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
               )}
             </div>
 
-            <div className="h-px bg-gray-100" />
+            <div className={`h-px ${darkMode ? 'bg-slate-600' : 'bg-gray-100'}`} />
 
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 min-w-0">
-                {showAllMacs ? <Eye className="w-4 h-4 text-[#002D72] shrink-0" /> : <EyeOff className="w-4 h-4 text-gray-400 shrink-0" />}
-                <span className="text-sm font-medium text-gray-700 truncate">Mostrar todos los MACs</span>
+                {showAllMacs ? <Eye className="w-4 h-4 text-[#002D72] shrink-0" /> : <EyeOff className={`w-4 h-4 shrink-0 ${darkMode ? 'text-slate-400' : 'text-gray-400'}`} />}
+                <span className={`text-sm font-medium truncate ${darkMode ? 'text-slate-200' : 'text-gray-700'}`}>Mostrar todos los MACs</span>
               </div>
               <Switch
                 checked={showAllMacs}
@@ -310,7 +319,10 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">Carto</a> &copy; OSM'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png"
+          url={darkMode
+            ? 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+          }
         />
 
         <MapUpdater activeCenter={activeCenter} />
