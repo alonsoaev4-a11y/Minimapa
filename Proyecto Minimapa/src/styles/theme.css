@@ -186,3 +186,98 @@
     line-height: 1.5;
   }
 }
+
+/* Dark-mode coverage for legacy screens that still use fixed light utility colors. */
+@layer utilities {
+  .dark {
+    color-scheme: dark;
+  }
+
+  .dark :is(.bg-white, [class~="bg-white/95"], [class~="bg-white/90"], [class~="bg-white/80"], [class~="bg-white/70"]) {
+    background-color: #111111 !important;
+  }
+
+  .dark :is(.bg-gray-50, [class~="bg-gray-50/50"], .bg-gray-100) {
+    background-color: #171717 !important;
+  }
+
+  .dark .bg-gray-200 {
+    background-color: #262626 !important;
+  }
+
+  .dark :is(.bg-blue-50, .bg-green-50, .bg-orange-50, .bg-amber-50) {
+    background-color: #151515 !important;
+  }
+
+  .dark :is(.text-black, .text-gray-900, .text-gray-800) {
+    color: #f9fafb !important;
+  }
+
+  .dark :is(.text-gray-700, .text-gray-600) {
+    color: #d1d5db !important;
+  }
+
+  .dark :is(.text-gray-500, .text-gray-400) {
+    color: #9ca3af !important;
+  }
+
+  .dark .text-blue-800 {
+    color: #93c5fd !important;
+  }
+
+  .dark .text-green-800 {
+    color: #86efac !important;
+  }
+
+  .dark :is(.text-orange-800, .text-amber-700, .text-amber-800) {
+    color: #fcd34d !important;
+  }
+
+  .dark :is(.border-gray-100, .border-gray-200, .border-gray-300) {
+    border-color: #3f3f46 !important;
+  }
+
+  .dark :is(.border-blue-200, .border-green-200, .border-orange-200, .border-amber-200) {
+    border-color: #52525b !important;
+  }
+
+  .dark :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), textarea, select, [data-slot="select-trigger"]) {
+    background-color: #171717 !important;
+    border-color: #3f3f46 !important;
+    color: #f9fafb !important;
+  }
+
+  .dark :is(input, textarea)::placeholder {
+    color: #71717a !important;
+  }
+
+  .dark [data-slot="select-content"] {
+    background-color: #171717 !important;
+    border-color: #3f3f46 !important;
+    color: #f9fafb !important;
+  }
+
+  .dark [class~="hover:bg-gray-50"]:hover,
+  .dark [class~="hover:bg-gray-100"]:hover,
+  .dark [class~="hover:bg-gray-200"]:hover {
+    background-color: #262626 !important;
+  }
+
+  .dark .leaflet-popup-content-wrapper,
+  .dark .leaflet-popup-tip {
+    background-color: #111111 !important;
+    border-color: #3f3f46 !important;
+    color: #f9fafb !important;
+  }
+
+  .dark .leaflet-container a.leaflet-popup-close-button {
+    color: #d1d5db !important;
+  }
+
+  .dark .leaflet-bar a,
+  .dark .leaflet-control-layers {
+    background-color: #171717 !important;
+    border-color: #3f3f46 !important;
+    color: #f9fafb !important;
+  }
+}

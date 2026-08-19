@@ -5,7 +5,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { DEFAULT_TRANSPORT_DATA } from '../data/transport';
 import type { TransportInfo, TransportLineColor } from '../data/transport';
 
-const TRANSPORT_MAP_URL = 'https://www.arcgis.com/apps/Embed/index.html?webmap=04ae4eae22ac47d18f703867e08b5172&extent=-109.0753,25.7165,-108.8217,25.8501&zoom=true&scale=true&legend=true&disable_scroll=false&theme=light';
+const TRANSPORT_MAP_URL = 'https://www.arcgis.com/apps/Embed/index.html?webmap=04ae4eae22ac47d18f703867e08b5172&extent=-109.0753,25.7165,-108.8217,25.8501&zoom=true&scale=true&legend=true&disable_scroll=false';
 
 const COLOR_CARD: Record<TransportLineColor, string> = {
   blue: 'bg-blue-50 border-blue-200',
@@ -25,7 +25,11 @@ const COLOR_BADGE: Record<TransportLineColor, string> = {
   orange: 'bg-orange-500',
 };
 
-export const TransportMap: React.FC = () => {
+interface TransportMapProps {
+  isDarkMode?: boolean;
+}
+
+export const TransportMap: React.FC<TransportMapProps> = ({ isDarkMode = false }) => {
   const [selectedMac, setSelectedMac] = useState<string>('none');
   const [transportInfos, setTransportInfos] = useState<TransportInfo[]>([]);
 
@@ -79,8 +83,8 @@ export const TransportMap: React.FC = () => {
           <Bus className="w-5 h-5 text-[#F2A900]" />
         </div>
         <div>
-          <h3 className="font-semibold text-[#002D72]">Mapa de Transporte Publico</h3>
-          <p className="text-sm text-gray-600">Compara las rutas de camiones que pasan cerca de los MACs dentro de CU UAS</p>
+          <h3 className="font-semibold text-[#002D72] dark:text-[#F2A900]">Mapa de Transporte Publico</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300">Compara las rutas de camiones que pasan cerca de los MACs dentro de CU UAS</p>
         </div>
       </div>
 
@@ -158,7 +162,7 @@ export const TransportMap: React.FC = () => {
 
       <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
         <iframe
-          src={TRANSPORT_MAP_URL}
+          src={`${TRANSPORT_MAP_URL}&theme=${isDarkMode ? 'dark' : 'light'}`}
           width="100%"
           height="600"
           frameBorder="0"
