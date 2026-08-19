@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapComponent } from './components/MapComponent';
 import { TransportMap } from './components/TransportMap';
 import { AdminLoginModal } from './components/AdminLoginModal';
@@ -22,6 +22,19 @@ const AppContent: React.FC = () => {
   const [macs, setMacs] = useState<MacWithAdvisor[]>([]);
   const [macsLoading, setMacsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
+  const mapSectionRef = useRef<HTMLElement>(null);
+
+  const handleSelectMac = (id: number | string) => {
+    setSelectedMacId(id);
+
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      setShowMacList(false);
+    }
+
+    window.setTimeout(() => {
+      mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
@@ -85,13 +98,13 @@ const AppContent: React.FC = () => {
     return (
       <div className={`min-h-screen text-gray-900 font-sans flex flex-col ${isDarkMode ? 'dark bg-black' : 'bg-[#f8afc]'}`}>
         <header className="bg-white dark:bg-black shadow-sm border-b border-gray-200 dark:border-white/10 z-10 relative">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 sm:h-20 py-2 sm:py-0 flex items-center justify-between gap-2">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <div className="shrink-0">
         <img
         src="/logo-subdireccion.png"
        alt="Subdirección Servicio Social UAS"
-        className="h-16 w-16 sm:h-20 sm:w-20 rounded-full object-cover border-2 border-[#F2A900] shadow-md"
+        className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 rounded-full object-cover border-2 border-[#F2A900] shadow-md"
       />
       </div>
               <div className="min-w-0">
@@ -104,56 +117,56 @@ const AppContent: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            <div className="grid grid-cols-5 sm:flex items-center gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setIsDarkMode(!isDarkMode)}
                 aria-label={isDarkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
                 aria-pressed={isDarkMode}
-                className="flex items-center gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border border-[#002D72]/20 text-[#002D72] dark:border-white/30 dark:text-white hover:bg-[#002D72]/5 dark:hover:bg-white/10"
+                className="flex items-center justify-center gap-2 px-2 sm:px-3 xl:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border border-[#002D72]/20 text-[#002D72] dark:border-white/30 dark:text-white hover:bg-[#002D72]/5 dark:hover:bg-white/10 min-w-0"
               >
                 {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-                <span className="hidden lg:inline">{isDarkMode ? 'Claro' : 'Oscuro'}</span>
+                <span className="hidden xl:inline">{isDarkMode ? 'Claro' : 'Oscuro'}</span>
               </button>
               <button
                 onClick={() => setShowAllMacs(!showAllMacs)}
                 aria-label="Ver todos los módulos"
-                className={`flex items-center gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border ${
+                className={`flex items-center justify-center gap-2 px-2 sm:px-3 xl:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border min-w-0 ${
                   showAllMacs
                     ? 'bg-[#002D72] text-white border-[#002D72]'
                     : 'text-[#002D72] border-[#002D72]/20 hover:bg-[#002D72]/5 dark:text-white dark:border-white/30 dark:hover:bg-white/10'
                 }`}
               >
                 <Layers size={18} />
-                <span className="hidden sm:inline">Ver todos</span>
+                <span className="hidden xl:inline">Ver todos</span>
               </button>
               <button
                 onClick={() => setShowTransportMap(!showTransportMap)}
                 aria-label="Transporte"
-                className={`flex items-center gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border ${
+                className={`flex items-center justify-center gap-2 px-2 sm:px-3 xl:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border min-w-0 ${
                   showTransportMap
                     ? 'bg-[#002D72] text-white border-[#002D72]'
                     : 'text-[#002D72] border-[#002D72]/20 hover:bg-[#002D72]/5 dark:text-white dark:border-white/30 dark:hover:bg-white/10'
                 }`}
               >
                 <Bus size={18} />
-                <span className="hidden sm:inline">Transporte</span>
+                <span className="hidden xl:inline">Transporte</span>
               </button>
               <button
                 onClick={() => setShowAdminLogin(true)}
                 aria-label="Admin"
-                className="flex items-center gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium bg-[#002D72] text-white hover:bg-[#001f50] shadow-md"
+                className="flex items-center justify-center gap-2 px-2 sm:px-3 xl:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium bg-[#002D72] text-white hover:bg-[#001f50] shadow-md min-w-0"
               >
                 <Shield size={18} />
-                <span className="hidden sm:inline">Admin</span>
+                <span className="hidden xl:inline">Admin</span>
               </button>
               <button
                 onClick={() => setShowMap(false)}
                 aria-label="Volver"
-                className="flex items-center gap-2 text-[#002D72] dark:text-white hover:bg-[#002D72]/5 dark:hover:bg-white/10 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border border-[#002D72]/20 dark:border-white/30"
+                className="flex items-center justify-center gap-2 text-[#002D72] dark:text-white hover:bg-[#002D72]/5 dark:hover:bg-white/10 px-2 sm:px-3 xl:px-4 py-2 sm:py-2.5 rounded-lg transition-colors font-medium border border-[#002D72]/20 dark:border-white/30 min-w-0"
               >
                 <ArrowLeft size={18} />
-                <span className="hidden sm:inline">Volver</span>
+                <span className="hidden xl:inline">Volver</span>
               </button>
             </div>
           </div>
@@ -163,9 +176,8 @@ const AppContent: React.FC = () => {
           {showTransportMap ? (
             <TransportMap isDarkMode={isDarkMode} />
           ) : (
-            <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
-              <aside className="w-full lg:w-1/3 flex flex-col gap-4 sm:gap-6">
-                <div className="bg-white dark:bg-[#111] border border-gray-200 dark:border-white/10 p-6 rounded-2xl shadow-sm relative overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 items-start">
+                <div className="order-1 lg:col-start-1 lg:row-start-1 bg-white dark:bg-[#111] border border-gray-200 dark:border-white/10 p-4 sm:p-6 rounded-2xl shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-[#002D72]/5 rounded-bl-full"></div>
                   <h2 className="text-2xl font-bold text-[#002D72] dark:text-white mb-3 relative z-10">
                     Directorio de Módulos
@@ -205,7 +217,7 @@ const AppContent: React.FC = () => {
                           {macList.map((mac) => (
                             <button
                               key={mac.id}
-                              onClick={() => setSelectedMacId(mac.id)}
+                              onClick={() => handleSelectMac(mac.id)}
                               className={`w-full text-left px-3 py-2 text-sm rounded-md transition-all ${
                                 selectedMacId === mac.id
                                   ? 'bg-white text-[#002D72] dark:text-white shadow-sm font-bold border border-gray-200'
@@ -221,7 +233,7 @@ const AppContent: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-[#111] border border-gray-200 dark:border-white/10 p-6 rounded-2xl shadow-sm flex flex-col gap-4">
+                <div className="order-3 lg:col-start-1 lg:row-start-2 bg-white dark:bg-[#111] border border-gray-200 dark:border-white/10 p-4 sm:p-6 rounded-2xl shadow-sm flex flex-col gap-4">
                   <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2 mb-2">
                     <Building size={18} className="text-gray-500" />
                     Simbología de Referencia
@@ -239,13 +251,12 @@ const AppContent: React.FC = () => {
                     ))}
                   </ul>
                 </div>
-              </aside>
 
-              <section className="w-full lg:w-2/3 h-[480px] sm:h-[600px] lg:h-[750px] bg-white dark:bg-[#111] rounded-2xl shadow-md border border-gray-200 dark:border-white/10 overflow-hidden relative">
+              <section ref={mapSectionRef} className="order-2 lg:col-span-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 w-full h-[65vh] min-h-[420px] sm:h-[600px] lg:h-[750px] scroll-mt-3 bg-white dark:bg-[#111] rounded-2xl shadow-md border border-gray-200 dark:border-white/10 overflow-hidden relative">
                 <MapComponent
                   markers={macs}
                   selectedMacId={selectedMacId}
-                  onSelectMac={(id) => setSelectedMacId(id)}
+                  onSelectMac={handleSelectMac}
                   disableControls={showAdminLogin}
                   showAllMacs={showAllMacs}
                   onShowAllMacsChange={setShowAllMacs}
