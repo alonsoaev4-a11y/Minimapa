@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { PoiModal } from './PoiModal';
-import { Navigation, MapPin, Eye, EyeOff, Database, Images, ChevronLeft, ChevronRight, Route, Navigation2, Filter, MoreVertical, X } from 'lucide-react';
+import { Navigation, MapPin, Eye, EyeOff, Database, Images, ChevronLeft, ChevronRight, Route, Navigation2, Filter, MoreVertical, X, Moon, Sun } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import type { MacWithAdvisor, PoiType } from '../types/supabase';
@@ -90,6 +90,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
   const [activeCenter, setActiveCenter] = useState<[number, number]>([25.7904, -108.9858]);
   const [showAllMacs, setShowAllMacs] = useState(false);
   const [advisorFilter, setAdvisorFilter] = useState<string>('all');
+  const [mapTheme, setMapTheme] = useState<'dark' | 'light'>('dark');
   const [controlsOpen, setControlsOpen] = useState(false);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -283,6 +284,20 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                 className="data-[state=checked]:bg-[#002D72] shrink-0"
               />
             </div>
+
+            <div className="h-px bg-gray-100" />
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {mapTheme === 'dark' ? <Moon className="w-4 h-4 text-[#002D72] shrink-0" /> : <Sun className="w-4 h-4 text-[#F2A900] shrink-0" />}
+                <span className="text-sm font-medium text-gray-700 truncate">Tema del mapa</span>
+              </div>
+              <Switch
+                checked={mapTheme === 'light'}
+                onCheckedChange={(checked) => setMapTheme(checked ? 'light' : 'dark')}
+                className="data-[state=checked]:bg-[#F2A900] shrink-0"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -310,7 +325,9 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">Carto</a> &copy; OSM'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png"
+          url={mapTheme === 'dark'
+            ? 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png'}
         />
 
         <MapUpdater activeCenter={activeCenter} />
