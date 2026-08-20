@@ -3,10 +3,11 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { PoiModal } from './PoiModal';
-import { Navigation, MapPin, Eye, EyeOff, Database, Route, Navigation2, Filter, MoreVertical, X, Moon, Sun } from 'lucide-react';
+import { Navigation, MapPin, Eye, EyeOff, Database, Images, ChevronLeft, ChevronRight, Route, Navigation2, Filter, MoreVertical, X, Moon, Sun } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import type { MacWithAdvisor, PoiType } from '../types/supabase';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { POI_CATALOG_MAP } from '../data/poiCatalog';
 
 // Dark theme map styling (Institutional UI)
@@ -91,6 +92,8 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
   const [advisorFilter, setAdvisorFilter] = useState<string>('all');
   const [mapTheme, setMapTheme] = useState<'dark' | 'light'>('light');
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState(0);
   const [userDistanceKm, setUserDistanceKm] = useState<number | null>(null);
   const markerRefs = React.useRef<{ [key: string]: any }>({});
 
@@ -185,6 +188,10 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
   const isFilteringByAdvisor = advisorFilter !== 'all';
   const shouldShowAllPins = showAllMacs || isFilteringByAdvisor;
   const visibleMarkers = shouldShowAllPins ? filteredMarkers : (activeMac ? [activeMac] : []);
+  const getMacGallery = (mac: MacWithAdvisor) => {
+    return mac.mac_images && mac.mac_images.length > 0 ? mac.mac_images : [];
+  };
+
   return (
     <div className="relative w-full h-full bg-gray-50">
       <style>{mapStyles}</style>
@@ -357,9 +364,17 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                           {mac.advisors.map((advisor, index) => (
                             <div key={advisor.id}>
                               <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#002D72] flex items-center justify-center text-white font-bold text-sm border-[3px] border-[#F2A900] shrink-0">
-                                  {advisor.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('')}
-                                </div>
+                                {advisor.photo_url ? (
+                                  <img
+                                    src={advisor.photo_url}
+                                    alt={`${advisor.title} ${advisor.name}`}
+                                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-[3px] border-[#002D72]/25 shadow-sm shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#002D72] flex items-center justify-center text-white font-bold text-sm border-[3px] border-[#F2A900] shrink-0">
+                                    {advisor.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('')}
+                                  </div>
+                                )}
                                 <div>
                                   <span className="text-[10px] text-gray-500 block font-normal mb-0.5">{mac.advisors.length > 1 ? `Encargado ${index + 1}` : 'Encargado'}</span>
                                   <span className="text-sm font-semibold text-gray-800 leading-tight block">{advisor.title} {advisor.name}</span>
@@ -411,6 +426,16 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                       Puntos de interés
                     </button>
                     <button
+                      onClick={() => {
+                        setPhotoIndex(0);
+                        setActiveMac({ ...mac, mac_images: getMacGallery(mac) });
+                        setPhotoViewerOpen(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 bg-[#F2A900] hover:bg-[#e39c00] text-[#002D72] py-2.5 rounded-xl text-sm font-semibold transition-all"
+                    >
+                      Ver fotos del módulo <Images size={14} />
+                    </button>
+                    <button
                       onClick={() => handleNavigate(mac)}
                       className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 py-2.5 rounded-xl text-sm font-medium transition-colors border border-gray-200 shadow-sm"
                     >
@@ -441,6 +466,58 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
           );
         })}
       </MapContainer>
+
+      <Dialog open={photoViewerOpen} onOpenChange={setPhotoViewerOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Fotos del MAC {activeMac?.name}</DialogTitle>
+            <DialogDescription>
+              Galería de imágenes registradas para este módulo MAC.
+            </DialogDescription>
+          </DialogHeader>
+          {activeMac?.mac_images && activeMac.mac_images.length > 0 ? (
+            <div className="space-y-3">
+              <div className="relative">
+                <img
+                  src={activeMac.mac_images[photoIndex]?.photo_url}
+                  alt={`MAC ${activeMac.name}`}
+                  className="w-full h-[260px] sm:h-[360px] object-cover rounded-xl border border-gray-200"
+                />
+                {activeMac.mac_images.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Foto anterior"
+                      onClick={() => setPhotoIndex((prev) => (prev - 1 + activeMac.mac_images!.length) % activeMac.mac_images!.length)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Foto siguiente"
+                      onClick={() => setPhotoIndex((prev) => (prev + 1) % activeMac.mac_images!.length)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 text-center">{photoIndex + 1} / {activeMac.mac_images.length}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">Sin fotos disponibles para este MAC.</p>
+          )}
+          {activeMac?.details?.trim() && (
+            <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {activeMac.details}
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {activeMac && (
         <PoiModal

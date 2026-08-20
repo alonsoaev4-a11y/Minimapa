@@ -455,39 +455,6 @@ const AppContent: React.FC = () => {
         </div>
       </section>
 
-      <footer className="bg-[#002D72] dark:bg-black text-white py-12 mt-auto border-t border-transparent dark:border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center font-black font-heading text-[#002D72] text-sm border-2 border-[#F2A900]">
-                UAS
-              </div>
-              <span className="font-bold font-heading text-lg">Dirección de Servicio Social</span>
-            </div>
-            <p className="text-gray-300 text-sm">
-              Universidad Autónoma de Sinaloa<br />
-              Sursum Versus
-            </p>
-          </div>
-          <div>
-            <h4 className="font-bold text-[#F2A900] mb-4">Enlaces Rápidos</h4>
-            <ul className="space-y-2 text-sm text-gray-300">
-              <li><a href="#" className="hover:text-white">Sistema SISS</a></li>
-              <li><a href="#" className="hover:text-white">Preguntas Frecuentes</a></li>
-              <li><a href="#" className="hover:text-white">Directorio de MACs</a></li>
-              <li><a href="#" className="hover:text-white">Formatos de Descarga</a></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold text-[#F2A900] mb-4">Contacto</h4>
-            <ul className="space-y-2 text-sm text-gray-300">
-              <li>📞 (667) 759 38 00</li>
-              <li>✉️ serviciosocial@uas.edu.mx</li>
-              <li>📍 Culiacán, Sinaloa, México</li>
-            </ul>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

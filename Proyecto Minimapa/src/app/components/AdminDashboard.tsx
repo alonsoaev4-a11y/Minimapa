@@ -1213,8 +1213,18 @@ export const AdminDashboard: React.FC = () => {
               Usa el picker de coordenadas o escribe los valores manualmente.
             </p>
             <div className="space-y-2">
-              <Label>Detalles</Label>
-              <Input value={macForm.details} onChange={(e) => setMacForm({ ...macForm, details: e.target.value })} placeholder="Descripción del módulo" />
+              <div className="flex items-center justify-between gap-3">
+                <Label>Descripción breve del módulo</Label>
+                <span className="text-xs text-gray-400">{macForm.details.length}/240</span>
+              </div>
+              <Textarea
+                value={macForm.details}
+                onChange={(e) => setMacForm({ ...macForm, details: e.target.value })}
+                placeholder="Escribe una descripción corta que aparecerá debajo de las fotos."
+                maxLength={240}
+                rows={3}
+                className="resize-none"
+              />
             </div>
             <div className="space-y-2">
               <Label>Horario</Label>
