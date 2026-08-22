@@ -60,6 +60,7 @@ export const AdminDashboard: React.FC = () => {
   });
   const [macPhotoFiles, setMacPhotoFiles] = useState<File[]>([]);
   const [macPhotoPreviews, setMacPhotoPreviews] = useState<string[]>([]);
+  const [macPhotoIdsToDelete, setMacPhotoIdsToDelete] = useState<string[]>([]);
 
   const [advisorForm, setAdvisorForm] = useState({
     title: 'Ing' as AdvisorTitle,
@@ -259,6 +260,7 @@ export const AdminDashboard: React.FC = () => {
             ...macData,
             pois: normalizedPois,
             advisors: selectedAdvisors,
+            mac_images: (m.mac_images || []).filter((image) => !macPhotoIdsToDelete.includes(image.id)),
           } : m);
         } else {
           const newMac: MacWithAdvisor = {
@@ -318,6 +320,30 @@ export const AdminDashboard: React.FC = () => {
             .from('mac_advisors')
             .insert(macAdvisorsToInsert);
           if (insertError) throw insertError;
+        }
+
+        if (editingMac && macPhotoIdsToDelete.length > 0) {
+          const imagesToDelete = (editingMac.mac_images || []).filter((image) =>
+            macPhotoIdsToDelete.includes(image.id),
+          );
+          const { error: deleteImagesError } = await supabase
+            .from('mac_images')
+            .delete()
+            .eq('mac_id', targetMacId)
+            .in('id', macPhotoIdsToDelete);
+          if (deleteImagesError) throw deleteImagesError;
+
+          const storagePaths = imagesToDelete
+            .map((image) => getMacPhotoStoragePath(image.photo_url))
+            .filter((path): path is string => Boolean(path));
+          if (storagePaths.length > 0) {
+            const { error: removeStorageError } = await supabase.storage
+              .from('mac-photos')
+              .remove(storagePaths);
+            if (removeStorageError) {
+              console.warn('La foto se quitó del MAC, pero no se pudo borrar el archivo de Storage.', removeStorageError);
+            }
+          }
         }
 
         if (macPhotoFiles.length > 0 && targetMacId) {
@@ -461,6 +487,17 @@ export const AdminDashboard: React.FC = () => {
     return data.publicUrl;
   };
 
+  const getMacPhotoStoragePath = (photoUrl: string): string | null => {
+    try {
+      const bucketPath = '/storage/v1/object/public/mac-photos/';
+      const path = new URL(photoUrl).pathname;
+      const bucketPathIndex = path.indexOf(bucketPath);
+      return bucketPathIndex === -1 ? null : decodeURIComponent(path.slice(bucketPathIndex + bucketPath.length));
+    } catch {
+      return null;
+    }
+  };
+
   const handleMacFilesChange = (files: FileList | null) => {
     if (!files || files.length === 0) {
       setMacPhotoFiles([]);
@@ -476,6 +513,15 @@ export const AdminDashboard: React.FC = () => {
       fr.readAsDataURL(file);
     }));
     Promise.all(readers).then((urls) => setMacPhotoPreviews(urls));
+  };
+
+  const removeSelectedMacPhoto = (index: number) => {
+    setMacPhotoFiles((files) => files.filter((_, fileIndex) => fileIndex !== index));
+    setMacPhotoPreviews((previews) => previews.filter((_, previewIndex) => previewIndex !== index));
+  };
+
+  const markMacPhotoForDeletion = (imageId: string) => {
+    setMacPhotoIdsToDelete((ids) => ids.includes(imageId) ? ids : [...ids, imageId]);
   };
 
   const handleSaveAdvisor = async () => {
@@ -801,6 +847,7 @@ export const AdminDashboard: React.FC = () => {
     setEditingMac(mac);
     setMacPhotoFiles([]);
     setMacPhotoPreviews([]);
+    setMacPhotoIdsToDelete([]);
     setMacPoisForm(
       (mac.pois || [])
         .slice()
@@ -850,6 +897,7 @@ export const AdminDashboard: React.FC = () => {
     setEditingMac(null);
     setMacPhotoFiles([]);
     setMacPhotoPreviews([]);
+    setMacPhotoIdsToDelete([]);
     setMacPoisForm([]);
     setCoordinatePickerTarget({ kind: 'mac' });
     setMacForm({ name: '', lat: '', lng: '', details: '', schedule: '', advisor_ids: [] });
@@ -1236,18 +1284,54 @@ export const AdminDashboard: React.FC = () => {
               {macPhotoPreviews.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   {macPhotoPreviews.map((url, idx) => (
-                    <img key={idx} src={url} alt={`Preview ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-200" />
+                    <div key={url} className="relative">
+                      <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-200" />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute -right-1.5 -top-1.5 h-6 w-6 rounded-full shadow-sm"
+                        onClick={() => removeSelectedMacPhoto(idx)}
+                        title="Quitar foto seleccionada"
+                        aria-label={`Quitar foto seleccionada ${idx + 1}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   ))}
                 </div>
               )}
-              {editingMac?.mac_images && editingMac.mac_images.length > 0 && (
+              {editingMac?.mac_images && editingMac.mac_images.filter((image) => !macPhotoIdsToDelete.includes(image.id)).length > 0 && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-2">Fotos actuales ({editingMac.mac_images.length})</p>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Fotos actuales ({editingMac.mac_images.filter((image) => !macPhotoIdsToDelete.includes(image.id)).length})
+                  </p>
                   <div className="grid grid-cols-4 gap-2">
-                    {editingMac.mac_images.slice(0, 8).map((img) => (
-                      <img key={img.id} src={img.photo_url} alt="MAC" className="w-full h-16 object-cover rounded-md border border-gray-200" />
+                    {editingMac.mac_images
+                      .filter((image) => !macPhotoIdsToDelete.includes(image.id))
+                      .slice(0, 8)
+                      .map((img) => (
+                      <div key={img.id} className="relative">
+                        <img src={img.photo_url} alt="MAC" className="w-full h-16 object-cover rounded-md border border-gray-200" />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute -right-1.5 -top-1.5 h-6 w-6 rounded-full shadow-sm"
+                          onClick={() => markMacPhotoForDeletion(img.id)}
+                          title="Quitar esta foto"
+                          aria-label="Quitar esta foto"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     ))}
                   </div>
+                  {macPhotoIdsToDelete.length > 0 && (
+                    <p className="mt-2 text-xs text-amber-700">
+                      Las fotos que quitaste se eliminarán al guardar los cambios.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
