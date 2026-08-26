@@ -28,7 +28,7 @@ const mapStyles = `
   }
   .leaflet-popup-content {
     margin: 0 !important;
-    width: 300px !important;
+    width: 236px !important;
     max-width: calc(100vw - 48px) !important;
   }
   .leaflet-container a.leaflet-popup-close-button {
@@ -39,7 +39,16 @@ const mapStyles = `
   .leaflet-container a.leaflet-popup-close-button:hover {
     color: #111827 !important;
   }
+  .map-theme-dark .leaflet-tile-pane {
+    filter: grayscale(0.75) brightness(0.58) contrast(1.12) sepia(0.18) hue-rotate(165deg);
+  }
 `;
+
+const INITIAL_MAP_ZOOM = 13;
+const SELECTED_MAC_ZOOM = 16;
+
+const isSubdireccionMac = (mac: MacWithAdvisor) =>
+  mac.name.toLocaleLowerCase('es-MX').includes('subdireccion');
 
 const createMacIcon = (isActive: boolean, pinColor: string = '#002D72') => L.divIcon({
   className: 'bg-transparent',
@@ -65,13 +74,13 @@ const getPoiIcon = (type: string) => {
   });
 };
 
-const MapUpdater = ({ activeCenter }: { activeCenter: [number, number] }) => {
+const MapUpdater = ({ activeCenter, zoom }: { activeCenter: [number, number]; zoom: number }) => {
   const map = useMap();
   useEffect(() => {
     if (activeCenter && !isNaN(activeCenter[0]) && !isNaN(activeCenter[1])) {
-      map.flyTo(activeCenter, 14, { duration: 1.5, easeLinearity: 0.25 });
+      map.flyTo(activeCenter, zoom, { duration: 1.2, easeLinearity: 0.25 });
     }
-  }, [activeCenter, map]);
+  }, [activeCenter, map, zoom]);
   return null;
 };
 
@@ -88,6 +97,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
   const [activeMac, setActiveMac] = useState<MacWithAdvisor | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeCenter, setActiveCenter] = useState<[number, number]>([25.7904, -108.9858]);
+  const [mapZoom, setMapZoom] = useState(INITIAL_MAP_ZOOM);
   const [showAllMacs, setShowAllMacs] = useState(false);
   const [advisorFilter, setAdvisorFilter] = useState<string>('all');
   const [mapTheme, setMapTheme] = useState<'dark' | 'light'>('light');
@@ -109,29 +119,37 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
     return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  // Center map on first marker when markers load
+  const defaultMac = useMemo(
+    () => markers.find(isSubdireccionMac) ?? markers[0] ?? null,
+    [markers],
+  );
+
+  // El punto de partida es Subdirección, pero no se selecciona ni abre su ficha.
   useEffect(() => {
-    if (markers.length > 0) {
-      const first = markers[0];
-      if (typeof first.lat === 'number' && typeof first.lng === 'number' && !isNaN(first.lat) && !isNaN(first.lng)) {
-        setActiveCenter([first.lat, first.lng]);
+    if (defaultMac) {
+      if (typeof defaultMac.lat === 'number' && typeof defaultMac.lng === 'number' && !isNaN(defaultMac.lat) && !isNaN(defaultMac.lng)) {
+        setActiveMac(null);
+        setActiveCenter([defaultMac.lat, defaultMac.lng]);
+        setMapZoom(INITIAL_MAP_ZOOM);
       }
     }
-  }, [markers]);
+  }, [defaultMac]);
 
   // Pan to selected MAC and open popup
   useEffect(() => {
-    if (selectedMacId) {
+    if (selectedMacId !== null && selectedMacId !== undefined) {
       const mac = markers.find(m => m.id === selectedMacId);
       if (mac && typeof mac.lat === 'number' && typeof mac.lng === 'number' && !isNaN(mac.lat) && !isNaN(mac.lng)) {
         setActiveMac(mac);
-        setActiveCenter([mac.lat + 0.025, mac.lng]);
+        // Conserva espacio para la ficha sin alejar el punto seleccionado.
+        setActiveCenter([mac.lat + 0.004, mac.lng]);
+        setMapZoom(SELECTED_MAC_ZOOM);
         const timer = setTimeout(() => {
           const marker = markerRefs.current[mac.id];
           if (marker && !marker.isPopupOpen()) {
             marker.openPopup();
           }
-        }, 1500);
+        }, 600);
         return () => clearTimeout(timer);
       }
     }
@@ -187,13 +205,13 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
 
   const isFilteringByAdvisor = advisorFilter !== 'all';
   const shouldShowAllPins = showAllMacs || isFilteringByAdvisor;
-  const visibleMarkers = shouldShowAllPins ? filteredMarkers : (activeMac ? [activeMac] : []);
+  const visibleMarkers = shouldShowAllPins ? filteredMarkers : (activeMac ? [activeMac] : defaultMac ? [defaultMac] : []);
   const getMacGallery = (mac: MacWithAdvisor) => {
     return mac.mac_images && mac.mac_images.length > 0 ? mac.mac_images : [];
   };
 
   return (
-    <div className="relative w-full h-full bg-gray-50">
+    <div className={`relative w-full h-full bg-gray-50 ${mapTheme === 'dark' ? 'map-theme-dark' : ''}`}>
       <style>{mapStyles}</style>
 
       {/* Controles del mapa: botón de 3 puntos + panel desplegable */}
@@ -319,18 +337,16 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
 
       <MapContainer
         center={activeCenter}
-        zoom={10}
+        zoom={INITIAL_MAP_ZOOM}
         style={{ width: '100%', height: '100%', zIndex: 1 }}
         zoomControl={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://carto.com/">Carto</a> &copy; OSM'
-          url={mapTheme === 'dark'
-            ? 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
-            : 'https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png'}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <MapUpdater activeCenter={activeCenter} />
+        <MapUpdater activeCenter={activeCenter} zoom={mapZoom} />
 
         {visibleMarkers.map((mac) => {
           if (typeof mac.lat !== 'number' || typeof mac.lng !== 'number' || isNaN(mac.lat) || isNaN(mac.lng)) return null;
@@ -344,46 +360,47 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                 click: () => {
                   setActiveMac(mac);
                   if (onSelectMac) onSelectMac(mac.id);
-                  setActiveCenter([mac.lat + 0.025, mac.lng]);
+                  setActiveCenter([mac.lat + 0.004, mac.lng]);
+                  setMapZoom(SELECTED_MAC_ZOOM);
                 }
               }}
             >
-              <Popup offset={[0, 10]}>
-                <div className="p-5">
-                  <div className="mb-4">
-                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-[#002D72]/10 text-[#002D72] text-[10px] font-bold uppercase tracking-wider mb-3">
+              <Popup offset={[0, 10]} maxWidth={236} minWidth={216} autoPanPadding={[20, 20]}>
+                <div className="max-h-[320px] overflow-y-auto overscroll-contain p-2.5 pr-2 sm:max-h-[360px] sm:p-3 sm:pr-2.5 custom-scrollbar">
+                  <div className="mb-2">
+                    <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#002D72]/10 text-[#002D72] text-[9px] font-bold uppercase tracking-wider mb-2">
                       <MapPin size={10} />
                       Módulo MAC
                     </div>
-                    <h3 className="font-bold text-lg text-gray-900 leading-tight">Módulo de Atención Comunitaria {mac.name}</h3>
-                    <p className="text-xs text-gray-500 mt-1">{mac.details}</p>
+                    <h3 className="font-bold text-sm text-gray-900 leading-tight">MAC {mac.name}</h3>
+                    <p className="text-[11px] text-gray-500 mt-1 leading-snug">{mac.details}</p>
 
-                    <div className="mt-4 bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                    <div className="mt-2 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                       {mac.advisors && mac.advisors.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {mac.advisors.map((advisor, index) => (
                             <div key={advisor.id}>
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2">
                                 {advisor.photo_url ? (
                                   <img
                                     src={advisor.photo_url}
                                     alt={`${advisor.title} ${advisor.name}`}
-                                    className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-[3px] border-[#002D72]/25 shadow-sm shrink-0"
+                                    className="w-8 h-8 rounded-full object-cover border-2 border-[#002D72]/25 shadow-sm shrink-0"
                                   />
                                 ) : (
-                                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#002D72] flex items-center justify-center text-white font-bold text-sm border-[3px] border-[#F2A900] shrink-0">
+                                  <div className="w-8 h-8 rounded-full bg-[#002D72] flex items-center justify-center text-white font-bold text-[10px] border-2 border-[#F2A900] shrink-0">
                                     {advisor.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('')}
                                   </div>
                                 )}
                                 <div>
-                                  <span className="text-[10px] text-gray-500 block font-normal mb-0.5">{mac.advisors.length > 1 ? `Encargado ${index + 1}` : 'Encargado'}</span>
-                                  <span className="text-sm font-semibold text-gray-800 leading-tight block">{advisor.title} {advisor.name}</span>
+                                  <span className="text-[9px] text-gray-500 block font-normal">{mac.advisors.length > 1 ? `Encargado ${index + 1}` : 'Encargado'}</span>
+                                  <span className="text-[12px] font-semibold text-gray-800 leading-tight block">{advisor.title} {advisor.name}</span>
                                   {advisor.academic_program?.name && (
-                                    <span className="text-[11px] text-gray-600">{advisor.academic_program.name}</span>
+                                    <span className="text-[10px] text-gray-600">{advisor.academic_program.name}</span>
                                   )}
                                 </div>
                               </div>
-                              {index < mac.advisors.length - 1 && <div className="w-full h-px bg-gray-200 my-2"></div>}
+                              {index < mac.advisors.length - 1 && <div className="w-full h-px bg-gray-200 my-1.5"></div>}
                             </div>
                           ))}
                         </div>
@@ -391,24 +408,24 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                         <p className="text-sm text-gray-400 italic">Sin encargado asignado</p>
                       )}
 
-                      <div className="w-full h-px bg-gray-200 my-3"></div>
+                      <div className="w-full h-px bg-gray-200 my-2"></div>
 
                       <div>
-                        <span className="text-[10px] text-gray-500 block font-normal mb-0.5">Horario de Oficina</span>
-                        <span className="text-sm font-semibold text-gray-800">{mac.schedule}</span>
+                        <span className="text-[9px] text-gray-500 block font-normal">Horario de Oficina</span>
+                        <span className="text-[12px] font-semibold text-gray-800 leading-tight block">{mac.schedule}</span>
                       </div>
 
                       {mac.name.toLowerCase() !== 'los mochis' && (
                         <>
-                          <div className="w-full h-px bg-gray-200 my-3"></div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-xs text-[#002D72]">
-                              <Route size={12} />
+                          <div className="w-full h-px bg-gray-200 my-2"></div>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-[11px] leading-tight text-[#002D72]">
+                              <Route size={10} />
                               <span>Distancia aprox. desde MAC Los Mochis: {haversineKm(losMochisCoords[0], losMochisCoords[1], mac.lat, mac.lng).toFixed(1)} km</span>
                             </div>
                             {userDistanceKm !== null && (
-                              <div className="flex items-center gap-2 text-xs text-gray-600">
-                                <Navigation2 size={12} />
+                              <div className="flex items-center gap-1.5 text-[11px] leading-tight text-gray-600">
+                                <Navigation2 size={10} />
                                 <span>Desde tu ubicación GPS: {userDistanceKm.toFixed(1)} km</span>
                               </div>
                             )}
@@ -418,10 +435,10 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2.5 mt-5">
+                  <div className="flex flex-col gap-1.5 mt-3">
                     <button
                       onClick={() => setIsModalOpen(true)}
-                      className="w-full flex items-center justify-center gap-2 bg-[#002D72] hover:bg-[#001f50] text-white py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md shadow-[#002D72]/20"
+                      className="w-full flex items-center justify-center gap-1.5 bg-[#002D72] hover:bg-[#001f50] text-white py-1.5 rounded-lg text-xs font-semibold transition-all shadow-md shadow-[#002D72]/20"
                     >
                       Puntos de interés
                     </button>
@@ -431,13 +448,13 @@ export const MapComponent: React.FC<MapComponentProps> = ({ markers, selectedMac
                         setActiveMac({ ...mac, mac_images: getMacGallery(mac) });
                         setPhotoViewerOpen(true);
                       }}
-                      className="w-full flex items-center justify-center gap-2 bg-[#F2A900] hover:bg-[#e39c00] text-[#002D72] py-2.5 rounded-xl text-sm font-semibold transition-all"
+                      className="w-full flex items-center justify-center gap-1.5 bg-[#F2A900] hover:bg-[#e39c00] text-[#002D72] py-1.5 rounded-lg text-xs font-semibold transition-all"
                     >
                       Ver fotos del módulo <Images size={14} />
                     </button>
                     <button
                       onClick={() => handleNavigate(mac)}
-                      className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 py-2.5 rounded-xl text-sm font-medium transition-colors border border-gray-200 shadow-sm"
+                      className="w-full flex items-center justify-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 py-1.5 rounded-lg text-xs font-medium transition-colors border border-gray-200 shadow-sm"
                     >
                       Cómo llegar <Navigation size={14} className="text-[#F2A900]" />
                     </button>

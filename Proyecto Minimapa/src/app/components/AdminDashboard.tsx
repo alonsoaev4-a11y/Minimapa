@@ -1284,7 +1284,7 @@ export const AdminDashboard: React.FC = () => {
               {macPhotoPreviews.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   {macPhotoPreviews.map((url, idx) => (
-                    <div key={url} className="relative">
+                    <div key={`${url}-${idx}`} className="relative">
                       <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-200" />
                       <Button
                         type="button"
@@ -1301,32 +1301,37 @@ export const AdminDashboard: React.FC = () => {
                   ))}
                 </div>
               )}
-              {editingMac?.mac_images && editingMac.mac_images.filter((image) => !macPhotoIdsToDelete.includes(image.id)).length > 0 && (
+              {editingMac?.mac_images && editingMac.mac_images.length > 0 && (
                 <div>
                   <p className="text-xs text-gray-500 mb-2">
                     Fotos actuales ({editingMac.mac_images.filter((image) => !macPhotoIdsToDelete.includes(image.id)).length})
                   </p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {editingMac.mac_images
-                      .filter((image) => !macPhotoIdsToDelete.includes(image.id))
-                      .slice(0, 8)
-                      .map((img) => (
-                      <div key={img.id} className="relative">
-                        <img src={img.photo_url} alt="MAC" className="w-full h-16 object-cover rounded-md border border-gray-200" />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          className="absolute -right-1.5 -top-1.5 h-6 w-6 rounded-full shadow-sm"
-                          onClick={() => markMacPhotoForDeletion(img.id)}
-                          title="Quitar esta foto"
-                          aria-label="Quitar esta foto"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+                  {editingMac.mac_images.filter((image) => !macPhotoIdsToDelete.includes(image.id)).length > 0 ? (
+                    <div className="grid grid-cols-4 gap-2">
+                      {editingMac.mac_images
+                        .filter((image) => !macPhotoIdsToDelete.includes(image.id))
+                        .map((img) => (
+                          <div key={img.id} className="relative">
+                            <img src={img.photo_url} alt="MAC" className="w-full h-16 object-cover rounded-md border border-gray-200" />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute -right-1.5 -top-1.5 h-6 w-6 rounded-full shadow-sm"
+                              onClick={() => markMacPhotoForDeletion(img.id)}
+                              title="Quitar esta foto"
+                              aria-label="Quitar esta foto"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-2 text-xs text-gray-500">
+                      No quedarán fotos para este MAC.
+                    </p>
+                  )}
                   {macPhotoIdsToDelete.length > 0 && (
                     <p className="mt-2 text-xs text-amber-700">
                       Las fotos que quitaste se eliminarán al guardar los cambios.

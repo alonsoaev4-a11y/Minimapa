@@ -17,7 +17,7 @@ const AppContent: React.FC = () => {
   const [selectedMacId, setSelectedMacId] = useState<string | number | null>(null);
   const [showTransportMap, setShowTransportMap] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [showAllMacs, setShowAllMacs] = useState(false);
+  const [showAllMacs, setShowAllMacs] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [macs, setMacs] = useState<MacWithAdvisor[]>([]);
   const [macsLoading, setMacsLoading] = useState(false);
@@ -34,6 +34,13 @@ const AppContent: React.FC = () => {
     window.setTimeout(() => {
       mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
+  };
+
+  const openMap = () => {
+    // Cada visita inicia mostrando todos los módulos, sin abrir información previa.
+    setSelectedMacId(null);
+    setShowAllMacs(true);
+    setShowMap(true);
   };
 
   useEffect(() => {
@@ -88,7 +95,11 @@ const AppContent: React.FC = () => {
     loadMacs();
   }, [showMap, isAuthenticated]);
 
-  const macList = [...macs].sort((a, b) => a.name.localeCompare(b.name));
+  const macList = [...macs].sort((a, b) => {
+    const isSubdireccion = (mac: MacWithAdvisor) => mac.name.toLocaleLowerCase('es-MX').includes('subdireccion');
+    if (isSubdireccion(a) !== isSubdireccion(b)) return isSubdireccion(a) ? -1 : 1;
+    return a.name.localeCompare(b.name, 'es-MX');
+  });
 
   if (isAuthenticated) {
     return <AdminDashboard />;
@@ -311,7 +322,7 @@ const AppContent: React.FC = () => {
               <span className="hidden md:inline">{isDarkMode ? 'Modo claro' : 'Modo oscuro'}</span>
             </button>
             <button
-              onClick={() => setShowMap(true)}
+              onClick={openMap}
               className="flex items-center gap-2 bg-[#F2A900] text-[#002D72] px-3 py-2 md:px-5 md:py-2.5 rounded-lg hover:bg-yellow-400 transition-all font-bold shadow-md shadow-[#001f50]/50 shrink-0 text-sm md:text-base"
             >
               <Compass size={18} />
@@ -340,7 +351,7 @@ const AppContent: React.FC = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <button
-                onClick={() => setShowMap(true)}
+                onClick={openMap}
                 className="group flex items-center justify-center gap-2.5 bg-[#F2A900] text-[#002D72] px-7 py-4 rounded-xl font-bold hover:bg-yellow-400 transition-all shadow-xl shadow-black/20 text-base sm:text-lg"
               >
                 <Compass size={22} className="transition-transform group-hover:rotate-45" />
@@ -443,7 +454,7 @@ const AppContent: React.FC = () => {
                 Todo el directorio de Módulos de Atención Comunitaria en un solo mapa, listo para explorar desde tu celular o computadora.
               </p>
               <button
-                onClick={() => setShowMap(true)}
+                  onClick={openMap}
                 className="group inline-flex items-center justify-center gap-2.5 bg-[#F2A900] text-[#002D72] px-8 py-4 rounded-xl font-bold hover:bg-yellow-400 transition-all shadow-xl text-base sm:text-lg"
               >
                 <Compass size={22} className="transition-transform group-hover:rotate-45" />
